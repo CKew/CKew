@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vinden – ren planlösning</title>
+<title>Vinden – loungeförslag</title>
 <style>
   :root {
     --bg: #e9e6df; --panel: rgba(255,255,255,.9); --ink: #24262b; --muted: #666a73;
@@ -30,6 +30,8 @@
   input[type=checkbox] { accent-color: var(--accent); }
   #info { left: 12px; bottom: 12px; padding: 8px 12px; color: var(--muted); font-size: 12.5px; max-width: min(520px, calc(100% - 24px)); }
   #info b { color: var(--ink); font-weight: 600; }
+  #desc { margin: 0 0 6px; color: var(--ink); font-size: 13px; }
+  .lbl { color: var(--muted); font-size: 12.5px; margin-right: 2px; }
   #err { position: fixed; inset: 0; display: none; place-items: center; padding: 24px; text-align: center; }
 </style>
 </head>
@@ -37,23 +39,30 @@
 <canvas id="c"></canvas>
 
 <div id="top" class="panel">
-  <h1>Vinden – ren planlösning</h1>
+  <h1>Vinden – loungeförslag</h1>
   <div class="group" id="views">
     <button data-view="overview" aria-pressed="true">Översikt</button>
     <button data-view="window">Mot fönstret</button>
+    <button data-view="sofa">Från sittplatsen</button>
     <button data-view="desk">Mot skrivbordet</button>
     <button data-view="plan">Planvy</button>
     <button data-view="section">Sektion</button>
   </div>
+  <div class="group" id="props" role="group" aria-label="Inredningsförslag">
+    <span class="lbl">Förslag</span>
+    <button data-prop="a" aria-pressed="true">A · Låg soffa</button>
+    <button data-prop="b">B · Hörnsoffa</button>
+    <button data-prop="c">C · Fåtöljer</button>
+  </div>
   <div class="group">
     <label><input type="checkbox" id="tDims" checked> Mått</label>
-    <label><input type="checkbox" id="tDesk" checked> Skrivbord</label>
+    <label><input type="checkbox" id="tFurn" checked> Möbler</label>
     <label><input type="checkbox" id="tCurt" checked> Draperier</label>
-    <label><input type="checkbox" id="tScreen" checked> Avskärmning</label>
   </div>
 </div>
 
 <div id="info" class="panel">
+  <p id="desc"></p>
   <b>800 × 450 cm</b>, 330 cm mellan draperierna, <b>220 cm</b> till nock.
   Dra för att rotera · skift/högerklick eller två fingrar för att panorera · scrolla/nyp för att zooma.
 </div>
@@ -308,6 +317,156 @@
     box(0.16, 0.02, 0.44, M.black, cx + 0.18, h + 0.025, cz + 0.05);   // tangentbord
   })();
 
+  // ---------- Loungemöbler: byggstenar ----------
+  var F = {
+    linen: mat(0xb9ad9b), linenLight: mat(0xd6cdbf), sage: mat(0x8f9c86), rust: mat(0xb26a4c),
+    mustard: mat(0xc9a24a), wing: mat(0x66717f), oak: mat(0xc49a6c), darkWood: mat(0x3a2c26),
+    rugA: mat(0xd8d0c0), rugB: mat(0xbfae98), rugC: mat(0xa9b3a6), pot: mat(0xd9d2c5), plant: mat(0x4f7a4a),
+    shade: new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffe3b3).convertSRGBToLinear() }),
+    tv: new THREE.MeshBasicMaterial({ color: new THREE.Color(0x1d2027).convertSRGBToLinear() })
+  };
+  var lounge = new THREE.Group(); scene.add(lounge);
+
+  // Låg loungesoffa (vänd mot +z). Ryggens överkant hamnar på 65 cm, under fönsterbrädan.
+  function sofa(g, cx, cz, w, d, fabric, cushion, n, chaise) {
+    var s = new THREE.Group(), a = 0.16;
+    box(w, 0.24, d, fabric, 0, 0.2, 0, s);
+    box(w, 0.5, a, fabric, 0, 0.36, -d / 2 + a / 2, s);
+    [-1, 1].forEach(function (k) {
+      box(a, 0.42, d, fabric, k * (w / 2 - a / 2), 0.31, 0, s);
+      [-1, 1].forEach(function (j) { cyl(0.02, 0.02, 0.08, M.black, k * (w / 2 - 0.08), 0.04, j * (d / 2 - 0.08), s, 8); });
+    });
+    var iw = (w - 2 * a) / n;
+    for (var i = 0; i < n; i++) {
+      var x = -w / 2 + a + iw * (i + 0.5);
+      box(iw - 0.02, 0.12, d - 0.2, cushion, x, 0.38, 0.08, s);
+      box(iw - 0.04, 0.3, 0.16, cushion, x, 0.5, -d / 2 + 0.25, s).rotation.x = -0.18;
+    }
+    if (chaise) {   // schäslong i vänster ände, sticker ut i rummet
+      var cw = iw + a, cxl = -w / 2 + cw / 2, cl = chaise;
+      box(cw, 0.24, cl, fabric, cxl, 0.2, d / 2 + cl / 2, s);
+      box(a, 0.42, cl, fabric, -w / 2 + a / 2, 0.31, d / 2 + cl / 2, s);
+      box(iw - 0.02, 0.12, cl + 0.02, cushion, -w / 2 + a + iw / 2, 0.38, d / 2 + cl / 2 - 0.03, s);
+    }
+    s.position.set(cx, 0, cz); g.add(s); return s;
+  }
+  function pillow(g, x, y, z, rotY, material) {
+    var m = box(0.42, 0.4, 0.13, material, x, y, z, g); m.rotation.set(-0.3, rotY, 0, 'YXZ'); return m;
+  }
+  // TV 55" på låg bänk, skärmen vänd mot fönstret (-z). Överkant ca 110 cm.
+  function tvUnit(g, z) {
+    var t = new THREE.Group();
+    box(1.6, 0.26, 0.4, F.oak, 0, 0.19, 0, t);
+    [-1, 1].forEach(function (k) { [-1, 1].forEach(function (j) { cyl(0.018, 0.018, 0.06, M.black, k * 0.72, 0.03, j * 0.15, t, 8); }); });
+    box(0.5, 0.02, 0.24, M.black, 0, 0.33, 0, t);
+    box(0.06, 0.06, 0.04, M.black, 0, 0.37, 0.01, t);
+    box(1.23, 0.71, 0.035, M.black, 0, 0.755, 0, t);
+    var scr = new THREE.Mesh(new THREE.PlaneGeometry(1.19, 0.67), F.tv);
+    scr.position.set(0, 0.755, -0.019); scr.rotation.y = Math.PI; t.add(scr);
+    t.position.set(0, 0, z); g.add(t); return t;
+  }
+  function rug(g, x, z, w, d, material) { return box(w, 0.012, d, material, x, 0.006, z, g); }
+  function roundTable(g, x, z, r, h, material) {
+    cyl(r, r, 0.035, material, x, h - 0.018, z, g, 40);
+    cyl(0.035, 0.035, h - 0.05, material, x, (h - 0.05) / 2 + 0.015, z, g, 12);
+    cyl(r * 0.55, r * 0.55, 0.02, material, x, 0.01, z, g, 24);
+  }
+  function pouf(g, x, z, r, h, material) { return cyl(r, r * 0.94, h, material, x, h / 2, z, g, 24); }
+  function lamp(g, x, z, h, baseY) {   // golv- eller bordslampa med varm skärm
+    var y0 = baseY || 0;
+    cyl(0.11, 0.11, 0.02, M.black, x, y0 + 0.01, z, g, 20);
+    cyl(0.011, 0.011, h - 0.2, M.black, x, y0 + (h - 0.2) / 2, z, g, 8);
+    var sh = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.15, 0.2, 24, 1, true), F.shade);
+    sh.material.side = THREE.DoubleSide; sh.position.set(x, y0 + h - 0.1, z); g.add(sh);
+  }
+  function plant(g, x, z, h) {
+    cyl(0.15, 0.11, 0.26, F.pot, x, 0.13, z, g, 20);
+    [[0, 0.62, 0, 0.2], [0.1, 0.48, 0.06, 0.16], [-0.09, 0.5, -0.07, 0.15], [0.02, 0.8, -0.03, 0.14]].forEach(function (b) {
+      var k = h / 0.95, m = new THREE.Mesh(new THREE.SphereGeometry(b[3] * k, 12, 9), F.plant);
+      m.position.set(x + b[0] * k, 0.26 + (b[1] - 0.26) * k, z + b[2] * k); g.add(m);
+    });
+  }
+  function wingChair(g, x, z, rotY) {   // befintlig öronlappsfåtölj, ca 105 cm hög
+    var c = new THREE.Group();
+    box(0.62, 0.2, 0.58, F.wing, 0, 0.36, 0.02, c);
+    box(0.6, 0.72, 0.14, F.wing, 0, 0.7, -0.27, c).rotation.x = -0.14;
+    [-1, 1].forEach(function (k) {
+      box(0.1, 0.24, 0.6, F.wing, k * 0.33, 0.5, 0, c);
+      box(0.08, 0.42, 0.24, F.wing, k * 0.31, 0.84, -0.16, c).rotation.x = -0.14;
+      cyl(0.02, 0.014, 0.26, M.black, k * 0.26, 0.13, 0.24, c, 8);
+      cyl(0.02, 0.014, 0.26, M.black, k * 0.26, 0.13, -0.24, c, 8);
+    });
+    c.position.set(x, 0, z); c.rotation.y = rotY; g.add(c); return c;
+  }
+
+  // ---------- Tre inredningsförslag (TV:n mitt i rummet, sittplatser vid fönstret) ----------
+  var P = { a: new THREE.Group(), b: new THREE.Group(), c: new THREE.Group() };
+  Object.keys(P).forEach(function (k) { lounge.add(P[k]); });
+  var TVZ = 4.0;
+
+  // A – låg tresitssoffa under fönstret
+  (function (g) {
+    rug(g, 0, 2.15, 2.3, 2.5, F.rugA);
+    sofa(g, 0, 0.56, 2.3, 0.95, F.linen, F.linenLight, 3);
+    pillow(g, -0.82, 0.62, 0.5, 0.25, F.sage); pillow(g, 0.84, 0.62, 0.5, -0.2, F.rust);
+    box(1.1, 0.04, 0.6, F.oak, 0, 0.36, 1.78, g);                         // soffbord
+    [-1, 1].forEach(function (k) { [-1, 1].forEach(function (j) { cyl(0.016, 0.016, 0.34, M.black, k * 0.5, 0.17, 1.78 + j * 0.25, g, 8); }); });
+    pouf(g, 1.0, 2.4, 0.27, 0.38, F.sage);
+    roundTable(g, 1.4, 0.45, 0.2, 0.45, F.oak); lamp(g, 1.4, 0.45, 0.32, 0.45);
+    plant(g, -1.42, 0.42, 0.8);
+    lamp(g, -1.2, 1.3, 0.98);
+    tvUnit(g, TVZ);
+  })(P.a);
+
+  // B – hörnsoffa med schäslong längs vänstra sidan
+  (function (g) {
+    rug(g, 0.15, 2.25, 2.5, 2.6, F.rugB);
+    sofa(g, -0.1, 0.56, 2.7, 0.95, F.sage, mat(0xa6b19c), 3, 0.75);
+    pillow(g, -1.0, 0.62, 0.5, 0.3, F.mustard); pillow(g, 0.9, 0.62, 0.5, -0.25, F.linenLight);
+    box(0.5, 0.02, 0.6, F.mustard, -0.92, 0.455, 1.45, g);                 // pläd på schäslongen
+    roundTable(g, 0.45, 1.85, 0.42, 0.38, F.darkWood);
+    pouf(g, 1.2, 2.3, 0.28, 0.38, F.linen);
+    roundTable(g, 1.45, 0.42, 0.17, 0.45, F.oak); lamp(g, 1.45, 0.42, 0.32, 0.45);
+    plant(g, 1.42, 1.0, 0.72);
+    lamp(g, -1.2, 2.1, 0.98);
+    tvUnit(g, TVZ);
+  })(P.b);
+
+  // C – de befintliga öronlappsfåtöljerna på var sin sida om fönstret
+  (function (g) {
+    rug(g, 0, 2.05, 2.3, 2.9, F.rugC);
+    wingChair(g, -0.85, 0.85, 0.4); wingChair(g, 0.85, 0.85, -0.4);
+    roundTable(g, 0, 0.42, 0.24, 0.5, F.oak);                              // litet bord under fönsterbrädan
+    pouf(g, -0.5, 1.7, 0.23, 0.36, F.rust); pouf(g, 0.5, 1.7, 0.23, 0.36, F.rust);
+    roundTable(g, 0, 2.65, 0.6, 0.42, F.darkWood);                         // det befintliga runda bordet
+    box(0.6, 0.14, 0.6, F.sage, 1.05, 0.07, 2.2, g).rotation.y = 0.3;      // golvkudde
+    lamp(g, -1.2, 1.6, 0.98);
+    plant(g, 1.42, 0.4, 0.8);
+    tvUnit(g, TVZ);
+  })(P.c);
+
+  var DESC = {
+    a: '<b>A · Låg soffa under fönstret.</b> Tresitssoffa med 65 cm hög rygg, alltså under fönsterbrädan (72 cm). TV:n står på en låg bänk mitt i rummet, cirka 3,4 m från sittplatsen.',
+    b: '<b>B · Hörnsoffa med schäslong.</b> Soffan fyller gaveln och schäslongen ligger längs vänstra sidan, där det inte finns någon förvaring att komma åt. Ryggen är 65 cm hög.',
+    c: '<b>C · Fåtöljer vid fönstret.</b> De två öronlappsfåtöljerna du redan har står på var sin sida om fönstret med fotpallar, och det runda bordet står framför. Inget står framför själva fönstret.'
+  };
+  function setProp(k, fromHash) {
+    if (!P[k]) k = 'a';
+    Object.keys(P).forEach(function (n) { P[n].visible = n === k; });
+    [].forEach.call(document.querySelectorAll('#props button'), function (b) {
+      b.setAttribute('aria-pressed', b.dataset.prop === k ? 'true' : 'false');
+    });
+    document.getElementById('desc').innerHTML = DESC[k];
+    if (!fromHash) { try { location.hash = 'forslag-' + k; } catch (e) {} }
+  }
+  function propFromHash() { var m = /^#forslag-([abc])$/.exec(location.hash || ''); return m ? m[1] : null; }
+  document.getElementById('props').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (b) setProp(b.dataset.prop);
+  });
+  window.addEventListener('hashchange', function () { var k = propFromHash(); if (k) setProp(k, true); });
+  setProp(propFromHash() || 'a', true);
+  window.__setProp = setProp;
+
   // ---------- Måttsättning ----------
   var css = getComputedStyle(document.documentElement);
   var accent = new THREE.Color(css.getPropertyValue('--accent').trim());
@@ -355,13 +514,16 @@
   var VIEWS = {
     overview: [[7.5, 6.2, -3.5], [0, 0.5, 4.2]],
     window: [[0.35, 1.45, 7.6], [0, 0.95, 2.5]],
+    sofa: [[0, 1.0, 0.7], [0, 0.75, 4.0]],
     desk: [[1.1, 1.4, 3.6], [-0.9, 0.7, 6.6]],
-    plan: [[0, 14.5, 3.31], [0, 0, 3.3]],
+    plan: [[0, 15.4, 3.37], [0, 0, 3.36]],
     section: [[0, 1.3, -7.5], [0, 1.0, 4]]
   };
   var anim = null;
   function goView(name, instant) {
     var v = VIEWS[name], p1 = new THREE.Vector3().fromArray(v[0]), t1 = new THREE.Vector3().fromArray(v[1]);
+    // stående skärm: backa kameran så att hela rummet ryms i översikten
+    if (name === 'overview' && window.innerWidth < window.innerHeight) p1.sub(t1).multiplyScalar(1.5).add(t1);
     [].forEach.call(document.querySelectorAll('#views button'), function (b) {
       b.setAttribute('aria-pressed', b.dataset.view === name ? 'true' : 'false');
     });
@@ -410,8 +572,7 @@
     e.preventDefault(); anim = null; sph.r *= Math.exp(e.deltaY * 0.0012); clearPressed(); applyCam();
   }, { passive: false });
 
-  document.getElementById('tDesk').addEventListener('change', function (e) { desk.visible = e.target.checked; });
-  document.getElementById('tScreen').addEventListener('change', function (e) { screen.visible = e.target.checked; });
+  document.getElementById('tFurn').addEventListener('change', function (e) { lounge.visible = e.target.checked; });
   document.getElementById('tCurt').addEventListener('change', function (e) { curtains.visible = e.target.checked; });
 
   function resize() {
