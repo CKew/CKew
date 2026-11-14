@@ -29,6 +29,13 @@
   label { display: inline-flex; gap: 5px; align-items: center; cursor: pointer; user-select: none; }
   input[type=checkbox] { accent-color: var(--accent); }
   label[hidden] { display: none; }
+  @media (max-width: 560px) {
+    #top { padding: 8px; gap: 6px 8px; }
+    #top h1 { width: 100%; font-size: 14px; }
+    button { padding: 4px 8px; font-size: 13px; }
+    #info .hint { display: none; }
+    #desc { margin: 0; font-size: 12.5px; }
+  }
   #info { left: 12px; bottom: 12px; padding: 8px 12px; color: var(--muted); font-size: 12.5px; max-width: min(520px, calc(100% - 24px)); }
   #info b { color: var(--ink); font-weight: 600; }
   #desc { margin: 0 0 6px; color: var(--ink); font-size: 13px; }
@@ -51,7 +58,8 @@
   </div>
   <div class="group" id="props" role="group" aria-label="Inredningsförslag">
     <span class="lbl">Förslag</span>
-    <button data-prop="d" aria-pressed="true">D · Spelbord</button>
+    <button data-prop="e" aria-pressed="true">E · Som bilden</button>
+    <button data-prop="d">D · Spelbord</button>
     <button data-prop="a">A · Låg soffa</button>
     <button data-prop="b">B · Hörnsoffa</button>
     <button data-prop="c">C · Fåtöljer</button>
@@ -61,13 +69,14 @@
     <label><input type="checkbox" id="tFurn" checked> Möbler</label>
     <label id="lGame"><input type="checkbox" id="tGame"> Spelläge</label>
     <label><input type="checkbox" id="tCurt" checked> Draperier</label>
+    <label><input type="checkbox" id="tEve" checked> Kvällsljus</label>
   </div>
 </div>
 
 <div id="info" class="panel">
   <p id="desc"></p>
-  <b>800 × 450 cm</b>, 330 cm mellan draperierna, <b>220 cm</b> till nock.
-  Dra för att rotera · skift/högerklick eller två fingrar för att panorera · scrolla/nyp för att zooma.
+  <span class="hint"><b>800 × 450 cm</b>, 330 cm mellan draperierna, <b>220 cm</b> till nock.
+  Dra för att rotera · skift/högerklick eller två fingrar för att panorera · scrolla/nyp för att zooma.</span>
 </div>
 
 <div id="err">3D-biblioteket kunde inte laddas.</div>
@@ -94,11 +103,32 @@
   var scene = new THREE.Scene();
   var camera = new THREE.PerspectiveCamera(50, 1, 0.05, 100);
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.34));
-  scene.add(new THREE.HemisphereLight(0xffffff, 0xcbb089, 0.5));
-  var sun = new THREE.DirectionalLight(0xfff3dc, 0.38); sun.position.set(1.5, 3, -6); scene.add(sun);
-  var fill = new THREE.DirectionalLight(0xdfe8ff, 0.18); fill.position.set(-2, 2, 9); scene.add(fill);
-  var winLight = new THREE.PointLight(0xfff1d0, 0.35, 7); winLight.position.set(0, 1.4, 0.6); scene.add(winLight);
+  var dayLights = new THREE.Group(), eveLights = new THREE.Group(), eveFx = new THREE.Group();
+  scene.add(dayLights, eveLights, eveFx);
+  dayLights.add(new THREE.AmbientLight(0xffffff, 0.34));
+  dayLights.add(new THREE.HemisphereLight(0xffffff, 0xcbb089, 0.5));
+  var sun = new THREE.DirectionalLight(0xfff3dc, 0.38); sun.position.set(1.5, 3, -6); dayLights.add(sun);
+  var fill = new THREE.DirectionalLight(0xdfe8ff, 0.18); fill.position.set(-2, 2, 9); dayLights.add(fill);
+  var winLight = new THREE.PointLight(0xfff1d0, 0.35, 7); winLight.position.set(0, 1.4, 0.6); dayLights.add(winLight);
+  // Kvällsljus: dämpat varmt grundljus, spotlights i nocken och ljuslist längs sidorna
+  eveLights.add(new THREE.AmbientLight(0xffd2a6, 0.07));
+  eveLights.add(new THREE.HemisphereLight(0xffddb8, 0x7a5232, 0.06));
+  [[-1.22, 0.8, 0.5, 0.45, 2.6], [0.4, 0.6, 1.85, 0.35, 2.0], [-1.1, 0.98, 7.27, 0.38, 2.4]].forEach(function (a) {
+    var l = new THREE.PointLight(0xffa850, a[3], a[4], 1.6); l.position.set(a[0], a[1], a[2]); eveLights.add(l);   // bordslampa, ljus, klotlampa
+  });
+  var GLOW = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffd9a0).convertSRGBToLinear() });
+  [1.2, 2.6, 4.0, 5.4, 6.8].forEach(function (z) {
+    var l = new THREE.PointLight(0xffb870, 0.5, 3.6, 2); l.position.set(0, 1.7, z); eveLights.add(l);
+    var d = new THREE.Mesh(new THREE.CircleGeometry(0.06, 20), GLOW);
+    d.rotation.x = Math.PI / 2; d.position.set(0, 1.857, z); eveFx.add(d);
+  });
+  [-1, 1].forEach(function (k) {
+    [1.3, 4.0, 6.7].forEach(function (z) {
+      var l = new THREE.PointLight(0xffa858, 0.3, 2.2, 1.6); l.position.set(k * 1.45, 0.86, z); eveLights.add(l);
+    });
+    var strip = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.02, L - 0.3), GLOW);
+    strip.position.set(k * (HI - 0.05), KNEE + 0.02, L / 2); eveFx.add(strip);   // precis under takfallet, ovanför draperierna
+  });
 
   // ---------- Texturer ----------
   var seed = 7;
@@ -164,7 +194,8 @@
 
   function mat(color, opts) {
     var o = { color: new THREE.Color(color).convertSRGBToLinear() }; if (opts) for (var k in opts) o[k] = opts[k];
-    return new THREE.MeshLambertMaterial(o);
+    o.specular = new THREE.Color(0x000000); o.shininess = 0;
+    return new THREE.MeshPhongMaterial(o);
   }
   var M = {
     roof: mat(0xffffff, { map: texRoof }),
@@ -389,13 +420,13 @@
       m.position.set(x + b[0] * k, 0.26 + (b[1] - 0.26) * k, z + b[2] * k); g.add(m);
     });
   }
-  function wingChair(g, x, z, rotY) {   // befintlig öronlappsfåtölj, ca 82 x 96 x 101 cm
-    var c = new THREE.Group();
-    box(0.7, 0.3, 0.62, F.wing, 0, 0.31, 0.12, c);
-    box(0.62, 0.78, 0.16, F.wing, 0, 0.62, -0.33, c).rotation.x = -0.2;
+  function wingChair(g, x, z, rotY, fabric) {   // befintlig öronlappsfåtölj, ca 82 x 96 x 101 cm
+    var c = new THREE.Group(), fw = fabric || F.wing;
+    box(0.7, 0.3, 0.62, fw, 0, 0.31, 0.12, c);
+    box(0.62, 0.78, 0.16, fw, 0, 0.62, -0.33, c).rotation.x = -0.2;
     [-1, 1].forEach(function (k) {
-      box(0.1, 0.5, 0.66, F.wing, k * 0.36, 0.41, 0.1, c);
-      box(0.08, 0.5, 0.3, F.wing, k * 0.37, 0.75, -0.2, c).rotation.x = -0.2;
+      box(0.1, 0.5, 0.66, fw, k * 0.36, 0.41, 0.1, c);
+      box(0.08, 0.5, 0.3, fw, k * 0.37, 0.75, -0.2, c).rotation.x = -0.2;
       cyl(0.022, 0.016, 0.16, M.black, k * 0.3, 0.08, 0.38, c, 8);
       cyl(0.022, 0.016, 0.16, M.black, k * 0.3, 0.08, -0.3, c, 8);
     });
@@ -423,7 +454,7 @@
   }
 
   // ---------- Inredningsförslag (TV:n mitt i rummet, sittplatser vid fönstret) ----------
-  var P = { a: new THREE.Group(), b: new THREE.Group(), c: new THREE.Group(), d: new THREE.Group() };
+  var P = { a: new THREE.Group(), b: new THREE.Group(), c: new THREE.Group(), d: new THREE.Group(), e: new THREE.Group() };
   Object.keys(P).forEach(function (k) { lounge.add(P[k]); });
   var TVZ = 4.0, TVX = -0.5;   // TV:n står till vänster om mitten, gången går förbi till höger
 
@@ -468,6 +499,124 @@
     tvUnit(g, TVX, TVZ);
   })(P.c);
 
+  // ---------- Stil enligt referensbilden: varma jordfärger, mörkt räfflat trä, ryamatta, växter och levande ljus ----------
+  function stripeTexture(c1, c2, n) {
+    var cv = document.createElement('canvas'); cv.width = 256; cv.height = 8;
+    var g = cv.getContext('2d'), w = 256 / n;
+    for (var i = 0; i < n; i++) { g.fillStyle = c1; g.fillRect(i * w, 0, w, 8); g.fillStyle = c2; g.fillRect(i * w, 0, w * 0.35, 8); }
+    var t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding; return t;
+  }
+  function shagTexture() {
+    var S = 128, cv = document.createElement('canvas'); cv.width = cv.height = S;
+    var g = cv.getContext('2d'), img = g.createImageData(S, S);
+    for (var i = 0; i < S * S; i++) {
+      var v = 0.8 + rnd() * 0.2; img.data[i * 4] = 198 * v; img.data[i * 4 + 1] = 182 * v; img.data[i * 4 + 2] = 158 * v; img.data[i * 4 + 3] = 255;
+    }
+    g.putImageData(img, 0, 0);
+    var t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(7, 12); t.encoding = THREE.sRGBEncoding; return t;
+  }
+  function pictureTexture(kind) {   // solnedgång över berg (TV) eller dimmig granskog (skärmar)
+    var cv = document.createElement('canvas'); cv.width = 256; cv.height = 144;
+    var g = cv.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 144), sun = kind === 'sunset';
+    if (sun) { gr.addColorStop(0, '#2b2a4a'); gr.addColorStop(0.42, '#c8603a'); gr.addColorStop(0.6, '#f2a54a'); gr.addColorStop(1, '#3a2a2a'); }
+    else { gr.addColorStop(0, '#a3b3b0'); gr.addColorStop(0.6, '#5f7672'); gr.addColorStop(1, '#22302e'); }
+    g.fillStyle = gr; g.fillRect(0, 0, 256, 144);
+    g.fillStyle = sun ? '#1c1a24' : '#18241f';
+    g.beginPath(); g.moveTo(0, 144);
+    for (var x = 0; x <= 256; x += (sun ? 20 : 8)) g.lineTo(x, (sun ? 92 : 104) - rnd() * (sun ? 36 : 50));
+    g.lineTo(256, 144); g.fill();
+    var t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; return t;
+  }
+  function basic(o) { return new THREE.MeshBasicMaterial(o); }
+  var S2 = {
+    taupe: mat(0xa5957f), taupeLight: mat(0xb9ab96), olive: mat(0x56613f), sand: mat(0xcdbfa8), moss: mat(0x3f4a35),
+    charcoal: mat(0x4b4f58), walnut: mat(0x8a5f3a), drumTop: mat(0x2b2623),
+    drum: mat(0xffffff, { map: stripeTexture('#2e2825', '#191513', 48) }),
+    shag: mat(0xffffff, { map: shagTexture() }),
+    linen: mat(0xcfc3b0, { side: THREE.DoubleSide }),
+    amber: basic({ color: new THREE.Color(0xffb04e).convertSRGBToLinear() }),
+    tvImg: basic({ map: pictureTexture('sunset') }), monImg: basic({ map: pictureTexture('forest') })
+  };
+  function candle(g, x, y, z) { return cyl(0.04, 0.035, 0.09, S2.amber, x, y + 0.045, z, g, 12); }
+  function sprig(g, x, y, z, k) {   // vas med kvistar eller liten krukväxt
+    cyl(0.05 * k, 0.04 * k, 0.14 * k, F.pot, x, y + 0.07 * k, z, g, 12);
+    [[0, 0.24, 0, 0.09], [0.06, 0.2, 0.03, 0.07], [-0.05, 0.19, -0.04, 0.07]].forEach(function (b) {
+      var m = new THREE.Mesh(new THREE.SphereGeometry(b[3] * k, 10, 8), F.plant);
+      m.position.set(x + b[0] * k, y + b[1] * k, z + b[2] * k); g.add(m);
+    });
+  }
+  // Runt, mörkt och räfflat bord. Skivan kan höjas till spelhöjd.
+  function drumTable(g, x, z, r, h) {
+    var t = new THREE.Group();
+    cyl(r * 0.92, r * 0.92, 0.38, S2.drum, 0, 0.19, 0, t, 48);
+    if (h > 0.45) cyl(0.05, 0.05, h - 0.4, M.black, 0, 0.38 + (h - 0.4) / 2, 0, t, 12);
+    cyl(r, r, 0.035, S2.drumTop, 0, h - 0.018, 0, t, 48);
+    t.position.set(x, 0, z); g.add(t); return t;
+  }
+  function sideTable(g, x, z, r, h) {   // litet svart metallbord
+    cyl(r, r, 0.02, M.black, x, h - 0.01, z, g, 24);
+    for (var i = 0; i < 3; i++) { var a = i * 2.094; cyl(0.008, 0.008, h - 0.02, M.black, x + Math.cos(a) * r * 0.8, (h - 0.02) / 2, z + Math.sin(a) * r * 0.8, g, 6); }
+  }
+  // TV på låg ribbpanel som är fäst i golv och takstol, med mörk räfflad bänk under
+  function tvPanel(g, x, z) {
+    var t = new THREE.Group(), top = H(x) - 0.01;
+    box(0.07, top, 0.07, M.white, 0, top / 2, 0.08, t);
+    for (var y = 0.42; y < 1.1; y += 0.125) box(1.3, 0.07, 0.02, M.white, 0, y, 0.03, t);
+    [-1, 1].forEach(function (k) { box(0.05, 1.16, 0.05, M.white, k * 0.63, 0.58, 0.035, t); });
+    box(1.3, 0.3, 0.36, S2.drum, 0, 0.21, -0.03, t);
+    box(1.23, 0.71, 0.035, M.black, 0, 0.78, -0.045, t);
+    var scr = new THREE.Mesh(new THREE.PlaneGeometry(1.19, 0.67), S2.tvImg);
+    scr.position.set(0, 0.78, -0.064); scr.rotation.y = Math.PI; t.add(scr);
+    t.position.set(x, 0, z); g.add(t); return t;
+  }
+
+  // E – som referensbilden: rak soffa under fönstret, en fåtölj på var sida, runt bord, TV på ribbpanel
+  var drumLow, drumGame;
+  (function (g) {
+    box(2.5, 0.02, 4.4, S2.shag, 0.1, 0.01, 2.8, g);                         // stor ryamatta
+    sofa(g, 0.2, 0.56, 2.3, 0.95, S2.taupe, S2.taupeLight, 3);
+    pillow(g, -0.72, 0.62, 0.5, 0.3, S2.olive); pillow(g, 1.08, 0.62, 0.5, -0.3, S2.sand); pillow(g, 0.74, 0.6, 0.52, -0.1, S2.olive);
+    box(0.5, 0.02, 0.55, S2.moss, 0.95, 0.455, 0.72, g); box(0.5, 0.3, 0.02, S2.moss, 0.95, 0.3, 1.045, g);   // pläd
+    drumLow = drumTable(g, 0.4, 1.85, 0.4, 0.42);
+    sprig(drumLow, 0, 0.42, -0.08, 1.1); candle(drumLow, -0.16, 0.42, 0.14); candle(drumLow, 0.1, 0.42, 0.2); candle(drumLow, 0.2, 0.42, 0.02);
+    drumGame = drumTable(g, 0.4, 1.85, 0.4, 0.66);
+    box(0.5, 0.012, 0.5, S2.olive, 0, 0.666, 0, drumGame); box(0.26, 0.05, 0.18, F.rust, 0.02, 0.69, 0.02, drumGame).rotation.y = 0.4;
+    drumGame.visible = false;
+    wingChair(g, -0.78, 2.0, Math.PI / 2 - 0.15, S2.charcoal);                // vänster fåtölj, vänd mot bordet
+    wingChair(g, 0.85, 2.9, Math.PI + 0.357, S2.charcoal);                    // höger fåtölj, snett mot bord och soffa
+    sideTable(g, -1.22, 0.5, 0.18, 0.5); lamp(g, -1.22, 0.5, 0.32, 0.5); plant(g, -1.43, 1.05, 0.7);
+    sideTable(g, 1.22, 1.7, 0.17, 0.5); candle(g, 1.18, 0.5, 1.66); candle(g, 1.28, 0.5, 1.76); sprig(g, 1.18, 0.5, 1.78, 0.8);
+    pouf(g, -0.95, 3.0, 0.25, 0.36, S2.sand);
+    plant(g, -1.42, 3.45, 0.78); plant(g, 1.36, 3.85, 0.72);
+    candle(g, -1.3, 0, 2.75); candle(g, -1.4, 0, 2.86);
+    tvPanel(g, TVX, TVZ);
+  })(P.e);
+
+  var deskE = new THREE.Group(); scene.add(deskE);
+  (function (g) {
+    var cx = -1.2, cz = 6.55, h = 0.74;
+    box(0.8, 0.04, 1.6, S2.walnut, cx, h, cz, g);
+    box(0.62, h - 0.04, 0.38, M.black, cx + 0.05, (h - 0.04) / 2, cz + 0.58, g);            // svart lådhurts
+    box(0.62, h - 0.04, 0.04, M.black, cx + 0.05, (h - 0.04) / 2, cz - 0.76, g);            // gavel
+    [-0.3, 0.3].forEach(function (dz) {
+      var m = new THREE.Group(); box(0.025, 0.33, 0.56, M.black, 0, 0, 0, m);
+      var im = new THREE.Mesh(new THREE.PlaneGeometry(0.53, 0.3), S2.monImg); im.rotation.y = Math.PI / 2; im.position.x = 0.014; m.add(im);
+      m.position.set(cx, h + 0.25, cz + dz); m.rotation.y = dz > 0 ? 0.12 : -0.12; g.add(m);
+    });
+    cyl(0.018, 0.018, 0.3, M.black, cx - 0.06, h + 0.15, cz, g, 8);
+    box(0.3, 0.006, 0.8, M.black, cx + 0.2, h + 0.023, cz, g);                               // skrivbordsunderlägg
+    box(0.14, 0.02, 0.42, S2.charcoal, cx + 0.2, h + 0.036, cz + 0.03, g);                   // tangentbord
+    var globe = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 12), GLOW); globe.position.set(cx + 0.1, h + 0.12, cz + 0.72); g.add(globe);
+    sprig(g, cx - 0.12, h + 0.02, cz - 0.7, 1.2); sprig(g, -0.62, 1.2, 5.55, 1.5);           // växt på bordet och hängande på ribbväggen
+    var c = new THREE.Group();                                                              // beige kontorsstol med svart fot
+    cyl(0.26, 0.22, 0.09, S2.sand, 0, 0.46, 0, c, 24);
+    var back = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.27, 0.36, 24, 1, true, Math.PI * 0.55, Math.PI * 0.9), mat(0xcdbfa8, { side: THREE.DoubleSide }));
+    back.position.set(0, 0.67, 0); c.add(back);
+    cyl(0.025, 0.025, 0.34, M.black, 0, 0.25, 0, c, 10);
+    for (var i = 0; i < 5; i++) { var a = i * Math.PI * 2 / 5; box(0.3, 0.03, 0.04, M.black, Math.cos(a) * 0.15, 0.08, Math.sin(a) * 0.15, c).rotation.y = -a; }
+    c.position.set(-0.4, 0, 6.5); c.rotation.y = -0.5; g.add(c);
+  })(deskE);
+
   // D – hörnsoffa under fönstret, två fåtöljer längs högra sidan, spelbord och TV på stolpe
   var tableLow, tableGame;
   (function (g) {
@@ -491,27 +640,30 @@
   var DESC = {
     a: '<b>A · Låg soffa under fönstret.</b> Tresitssoffa med 65 cm hög rygg, alltså under fönsterbrädan (72 cm). TV:n står på en låg bänk mitt i rummet, cirka 3,4 m från sittplatsen.',
     b: '<b>B · Hörnsoffa med schäslong.</b> Soffan fyller gaveln och schäslongen ligger längs vänstra sidan, där det inte finns någon förvaring att komma åt. Ryggen är 65 cm hög.',
+    e: '<b>E · Soffa och en fåtölj på var sida.</b> Rak soffa under fönstret och en fåtölj på var sida om det runda, mörka bordet (Ø 80 cm, går att höja till spelbord). TV:n sitter på en låg ribbpanel till vänster om mittgången. Färger, matta, växter och belysning följer din bild.',
     d: '<b>D · Hörnsoffa, två fåtöljer och spelbord.</b> Hörnsoffan står under fönstret med schäslongen åt vänster och fåtöljerna längs högra sidan. Bordet (60 × 110 cm) är höj- och sänkbart: 45 cm som soffbord, 68 cm som spelbord. TV:n sitter fast på en stolpe mellan golv och tak, till vänster om mittgången.',
     c: '<b>C · Fåtöljer vid fönstret.</b> De två öronlappsfåtöljerna du redan har står på var sin sida om fönstret med fotpallar, och det runda bordet står framför. Inget står framför själva fönstret.'
   };
   function setProp(k, fromHash) {
-    if (!P[k]) k = 'd';
+    if (!P[k]) k = 'e';
     Object.keys(P).forEach(function (n) { P[n].visible = n === k; });
     [].forEach.call(document.querySelectorAll('#props button'), function (b) {
       b.setAttribute('aria-pressed', b.dataset.prop === k ? 'true' : 'false');
     });
     document.getElementById('desc').innerHTML = DESC[k];
-    document.getElementById('lGame').hidden = k !== 'd';
+    desk.visible = k !== 'e'; deskE.visible = k === 'e';
+    curtains.traverse(function (m) { if (m.isMesh) m.material = k === 'e' ? S2.linen : M.curtain; });
+    document.getElementById('lGame').hidden = k !== 'd' && k !== 'e';
     if (!fromHash) { try { location.hash = 'forslag-' + k; } catch (e) {} }
   }
-  function propFromHash() { var m = /^#forslag-([abcd])$/.exec(location.hash || ''); return m ? m[1] : null; }
+  function propFromHash() { var m = /^#forslag-([abcde])$/.exec(location.hash || ''); return m ? m[1] : null; }
   document.getElementById('props').addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (b) setProp(b.dataset.prop);
   });
   window.addEventListener('hashchange', function () { var k = propFromHash(); if (k) setProp(k, true); });
-  setProp(propFromHash() || 'd', true);
+  setProp(propFromHash() || 'e', true);
   document.getElementById('tGame').addEventListener('change', function (e) {
-    tableGame.visible = e.target.checked; tableLow.visible = !e.target.checked;
+    tableGame.visible = drumGame.visible = e.target.checked; tableLow.visible = drumLow.visible = !e.target.checked;
   });
   window.__setProp = setProp;
 
@@ -629,7 +781,14 @@
     camera.fov = w < h ? 68 : 50; camera.updateProjectionMatrix();
   }
   window.addEventListener('resize', resize); resize();
-  goView('overview', true);
+  function setEvening(on) {
+    eveLights.visible = eveFx.visible = on; dayLights.visible = !on;
+    M.pane.color.set(on ? 0x56688c : 0xf4f6ee).convertSRGBToLinear();
+    document.body.style.background = on ? '#15110d' : '';
+  }
+  document.getElementById('tEve').addEventListener('change', function (e) { setEvening(e.target.checked); });
+  setEvening(true);
+  goView('window', true);
 
   function frame(now) {
     if (anim) {
