@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vinden – 3D-modell</title>
+<style>
+  :root {
+    --bg: #e9e6df; --panel: rgba(255,255,255,.9); --ink: #24262b; --muted: #666a73;
+    --line: rgba(0,0,0,.12); --accent: #b4472e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1d1f23; --panel: rgba(34,36,41,.9); --ink: #eceae5; --muted: #a2a5ad; --line: rgba(255,255,255,.14); --accent: #f08a6c; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--ink);
+    font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  canvas:active { cursor: grabbing; }
+  .panel { position: fixed; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  #top { top: 12px; left: 12px; right: 12px; padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+  #top h1 { font-size: 15px; margin: 0 6px 0 0; font-weight: 650; }
+  .group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  button { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--line);
+    border-radius: 7px; padding: 5px 10px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+  label { display: inline-flex; gap: 5px; align-items: center; cursor: pointer; user-select: none; }
+  input[type=checkbox] { accent-color: var(--accent); }
+  #info { left: 12px; bottom: 12px; padding: 8px 12px; color: var(--muted); font-size: 12.5px; max-width: min(520px, calc(100% - 24px)); }
+  #info b { color: var(--ink); font-weight: 600; }
+  #err { position: fixed; inset: 0; display: none; place-items: center; padding: 24px; text-align: center; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="top" class="panel">
+  <h1>Vinden – 3D-modell, steg 1</h1>
+  <div class="group" id="views">
+    <button data-view="overview" aria-pressed="true">Översikt</button>
+    <button data-view="window">Mot fönstret</button>
+    <button data-view="desk">Mot skrivbordet</button>
+    <button data-view="plan">Planvy</button>
+    <button data-view="section">Sektion</button>
+  </div>
+  <div class="group">
+    <label><input type="checkbox" id="tDims" checked> Mått</label>
+    <label><input type="checkbox" id="tFurn" checked> Möbler</label>
+    <label><input type="checkbox" id="tCurt" checked> Draperier</label>
+  </div>
+</div>
+
+<div id="info" class="panel">
+  <b>800 × 450 cm</b>, 330 cm mellan draperierna, <b>220 cm</b> till nock.
+  Dra för att rotera · skift/högerklick eller två fingrar för att panorera · scrolla/nyp för att zooma.
+</div>
+
+<div id="err">3D-biblioteket kunde inte laddas.</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  if (!window.THREE) { document.getElementById('err').style.display = 'grid'; return; }
+
+  // ---------- Mått (meter). x = bredd, y = höjd, z = längd (z=0 är gaveln med fönstret) ----------
+  var L = 8.0;        // längd
+  var W = 4.5;        // bredd vid ytterkanterna
+  var WI = 3.3;       // bredd mellan draperierna
+  var RIDGE = 2.2;    // höjd till nock
+  var EAVE = 0.2;     // antagen höjd på ytterväggen bakom draperierna
+  var HW = W / 2, HI = WI / 2;
+  function H(x) { return EAVE + (RIDGE - EAVE) * (1 - Math.abs(x) / HW); }  // takhöjd vid x
+  var KNEE = H(HI);   // höjd där draperierna möter taket (~0,73 m)
+
+  var canvas = document.getElementById('c');
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(50, 1, 0.05, 100);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.34));
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xcbb089, 0.5));
+  var sun = new THREE.DirectionalLight(0xfff3dc, 0.38); sun.position.set(1.5, 3, -6); scene.add(sun);
+  var fill = new THREE.DirectionalLight(0xdfe8ff, 0.18); fill.position.set(-2, 2, 9); scene.add(fill);
+  var winLight = new THREE.PointLight(0xfff1d0, 0.35, 7); winLight.position.set(0, 1.4, 0.6); scene.add(winLight);
+
+  // ---------- Texturer ----------
+  var seed = 7;
+  function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+
+  function plankTexture(base, gap, perMetre, vertical, vary, knots) {
+    var S = 512, cv = document.createElement('canvas'); cv.width = cv.height = S;
+    var g = cv.getContext('2d'), w = S / perMetre;
+    for (var i = 0; i < perMetre; i++) {
+      var d = (rnd() - 0.5) * vary;
+      g.fillStyle = 'rgb(' + base.map(function (c) { return Math.round(c + d); }).join(',') + ')';
+      if (vertical) g.fillRect(i * w, 0, w, S); else g.fillRect(0, i * w, S, w);
+      for (var k = 0; k < 14; k++) {       // ådring
+        g.strokeStyle = 'rgba(' + (knots ? '120,80,30' : '120,115,100') + ',' + (knots ? 0.05 + rnd() * 0.06 : 0.03 + rnd() * 0.03) + ')';
+        g.lineWidth = 1; g.beginPath();
+        var o = i * w + rnd() * w;
+        if (vertical) { g.moveTo(o, 0); g.lineTo(o, S); } else { g.moveTo(0, o); g.lineTo(S, o); }
+        g.stroke();
+      }
+      if (knots && rnd() < 0.8) {
+        g.fillStyle = 'rgba(95,55,20,' + (0.35 + rnd() * 0.3) + ')';
+        g.beginPath(); g.ellipse(rnd() * S, i * w + w * (0.25 + rnd() * 0.5), 5 + rnd() * 5, 3 + rnd() * 3, 0, 0, 7); g.fill();
+      }
+      g.fillStyle = gap;
+      if (vertical) g.fillRect(i * w, 0, 2, S); else g.fillRect(0, i * w, S, 2);
+    }
+    var t = new THREE.CanvasTexture(cv);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding;
+    t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    return t;
+  }
+
+  function curtainTexture() {
+    var S = 512, cv = document.createElement('canvas'); cv.width = cv.height = S;
+    var g = cv.getContext('2d');
+    g.fillStyle = '#eef0dd'; g.fillRect(0, 0, S, S);
+    var greens = ['#7f9a6a', '#93ad7c', '#5f7f55', '#a9bf93'];
+    for (var i = 0; i < 46; i++) {
+      var x = rnd() * S, y = rnd() * S, a = rnd() * Math.PI, r = 22 + rnd() * 26;
+      g.fillStyle = greens[i % 4];
+      for (var dx = -S; dx <= S; dx += S) for (var dy = -S; dy <= S; dy += S) {
+        g.beginPath(); g.ellipse(x + dx, y + dy, r, r * 0.38, a, 0, 7); g.fill();
+      }
+    }
+    for (var j = 0; j < 12; j++) {
+      var fx = rnd() * S, fy = rnd() * S;
+      for (var p = 0; p < 5; p++) {
+        var pa = p * 1.257 + j;
+        g.fillStyle = p % 2 ? '#f6e3de' : '#fbf3ee';
+        g.beginPath(); g.ellipse(fx + Math.cos(pa) * 13, fy + Math.sin(pa) * 13, 15, 8, pa, 0, 7); g.fill();
+      }
+      g.fillStyle = '#e59aa0'; g.beginPath(); g.arc(fx, fy, 6, 0, 7); g.fill();
+    }
+    var t = new THREE.CanvasTexture(cv);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.encoding = THREE.sRGBEncoding;
+    return t;
+  }
+
+  var texRoof = plankTexture([236, 232, 222], 'rgba(120,112,98,.55)', 8, false, 8, false);
+  var texGable = plankTexture([240, 237, 229], 'rgba(120,112,98,.5)', 8, true, 6, false);
+  var texFloor = plankTexture([203, 152, 92], 'rgba(110,70,30,.55)', 8, false, 22, true);
+  var texCurtain = curtainTexture();
+
+  function mat(color, opts) {
+    var o = { color: new THREE.Color(color).convertSRGBToLinear() }; if (opts) for (var k in opts) o[k] = opts[k];
+    return new THREE.MeshLambertMaterial(o);
+  }
+  var M = {
+    roof: mat(0xffffff, { map: texRoof }),
+    gable: mat(0xffffff, { map: texGable }),
+    floor: mat(0xffffff, { map: texFloor }),
+    white: mat(0xf3f1ec),
+    whiteDS: mat(0xf3f1ec, { side: THREE.DoubleSide }),
+    dark: mat(0x3a2c26),
+    black: mat(0x1c1c1e),
+    grey: mat(0x66717f),
+    greyLight: mat(0xb9b6b0),
+    rug: mat(0xcfcabd),
+    bed: mat(0xfafafa),
+    box: mat(0xc9a877),
+    glass: mat(0xbfd3dc, { transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }),
+    pane: new THREE.MeshBasicMaterial({ color: new THREE.Color(0xf4f6ee).convertSRGBToLinear() }),
+    curtain: mat(0xffffff, { map: texCurtain, side: THREE.DoubleSide })
+  };
+
+  var shell = new THREE.Group(), furniture = new THREE.Group(), curtains = new THREE.Group(), dims = new THREE.Group();
+  scene.add(shell, furniture, curtains, dims);
+
+  // ---------- Hjälpfunktioner ----------
+  var INSIDE = new THREE.Vector3(0, 1, L / 2);
+  // Fyrhörning vars framsida alltid vänds inåt rummet, så att skalet blir genomskinligt utifrån.
+  function quad(a, b, c, d, material, uw, vh, parent) {
+    var pa = new THREE.Vector3().fromArray(a), pb = new THREE.Vector3().fromArray(b), pd = new THREE.Vector3().fromArray(d);
+    var n = pb.clone().sub(pa).cross(pd.clone().sub(pa));
+    var mid = pa.clone().add(new THREE.Vector3().fromArray(c)).multiplyScalar(0.5);
+    var flip = n.dot(INSIDE.clone().sub(mid)) < 0;
+    var g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute([].concat(a, b, c, d), 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, uw, 0, uw, vh, 0, vh], 2));
+    g.setIndex(flip ? [0, 2, 1, 0, 3, 2] : [0, 1, 2, 0, 2, 3]);
+    g.computeVertexNormals();
+    var m = new THREE.Mesh(g, material); (parent || shell).add(m); return m;
+  }
+  function box(w, h, d, material, x, y, z, parent) {
+    var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
+    m.position.set(x, y, z); (parent || furniture).add(m); return m;
+  }
+  function cyl(rt, rb, h, material, x, y, z, parent, seg) {
+    var m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg || 32), material);
+    m.position.set(x, y, z); (parent || furniture).add(m); return m;
+  }
+
+  // ---------- Skal: golv, tak, gavlar ----------
+  var floor = new THREE.Mesh(new THREE.PlaneGeometry(W, L), M.floor);
+  floor.rotation.x = -Math.PI / 2; floor.position.set(0, 0, L / 2);
+  texFloor.repeat.set(W, L); shell.add(floor);
+
+  var slope = Math.hypot(HW, RIDGE - EAVE);
+  [-1, 1].forEach(function (s) {
+    quad([s * HW, EAVE, 0], [s * HW, EAVE, L], [0, RIDGE, L], [0, RIDGE, 0], M.roof, L, slope);   // takfall
+    quad([s * HW, 0, 0], [s * HW, 0, L], [s * HW, EAVE, L], [s * HW, EAVE, 0], M.white, 1, 1);     // låg yttervägg
+  });
+
+  function gableShape() {
+    var sh = new THREE.Shape();
+    sh.moveTo(-HW, 0); sh.lineTo(HW, 0); sh.lineTo(HW, EAVE); sh.lineTo(0, RIDGE); sh.lineTo(-HW, EAVE); sh.closePath();
+    return sh;
+  }
+  var g0 = new THREE.Mesh(new THREE.ShapeGeometry(gableShape()), M.gable); shell.add(g0);
+  var g1 = new THREE.Mesh(new THREE.ShapeGeometry(gableShape()), M.gable);
+  g1.rotation.y = Math.PI; g1.position.z = L; shell.add(g1);
+
+  // Nockens triangelformade inklädnader
+  [1.2, 2.6, 4.0, 5.4, 6.8].forEach(function (z) {
+    var yb = 1.86, hw = HW * (1 - (yb - EAVE) / (RIDGE - EAVE));
+    var sh = new THREE.Shape(); sh.moveTo(-hw, yb); sh.lineTo(hw, yb); sh.lineTo(0, RIDGE - 0.005); sh.closePath();
+    var m = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.14, bevelEnabled: false }), M.white);
+    m.position.z = z - 0.07; shell.add(m);
+  });
+
+  // Plan yta som bara syns inifrån (så att gavlarna förblir genomskinliga utifrån)
+  function face(w, h, material, x, y, z, flip) {
+    var m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), material);
+    m.position.set(x, y, z); if (flip) m.rotation.y = Math.PI; shell.add(m); return m;
+  }
+  // Fönster i gaveln (z=0)
+  (function () {
+    var w = 1.05, h = 1.05, y0 = 0.72;
+    face(w + 0.14, h + 0.14, M.white, 0, y0 + h / 2, 0.01);
+    [-1, 1].forEach(function (s) { face(w / 2 - 0.05, h - 0.06, M.pane, s * (w / 4 + 0.008), y0 + h / 2, 0.02); });
+    face(w - 0.04, 0.03, M.white, 0, y0 + h * 0.68, 0.03);
+  })();
+  // Glasad dörr/fönster i motsatt gavel (z=L) med draperier
+  (function () {
+    var w = 0.8, h = 1.75;
+    face(w + 0.14, h + 0.07, M.white, 0, h / 2 + 0.035, L - 0.01, true);
+    face(w - 0.06, h - 0.1, M.pane, 0, h / 2 + 0.02, L - 0.02, true);
+    [-1, 1].forEach(function (s) { curtain(0.28, 1.7, 0, 0, 0, curtains, s * (w / 2 + 0.12), L - 0.07, 0); });
+  })();
+
+  // ---------- Sidoförvaring: knävägg, mellanväggar och draperier ----------
+  function curtain(width, height, side, z0, _unused, parent, cx, cz, rotY) {
+    var g = new THREE.PlaneGeometry(width, height, Math.max(8, Math.round(width * 40)), 1);
+    var p = g.attributes.position, uv = g.attributes.uv;
+    for (var i = 0; i < p.count; i++) {
+      var u = p.getX(i);
+      p.setZ(i, Math.sin(u * 42) * 0.022 + Math.sin(u * 17 + 1) * 0.012);
+      uv.setXY(i, (u / width + 0.5) * width * 1.6, (p.getY(i) / height + 0.5) * height * 1.1);
+    }
+    g.computeVertexNormals();
+    var m = new THREE.Mesh(g, M.curtain);
+    m.position.set(cx, height / 2, cz); m.rotation.y = rotY;
+    (parent || curtains).add(m); return m;
+  }
+  function divider(side, z) {
+    var x0 = side * HI, x1 = side * HW;
+    var g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute([x0, 0, z, x1, 0, z, x1, EAVE, z, x0, KNEE, z], 3));
+    g.setIndex([0, 1, 2, 0, 2, 3]); g.computeVertexNormals();
+    shell.add(new THREE.Mesh(g, M.whiteDS));
+    box(0.03, KNEE, 0.11, M.white, side * (HI - 0.015), KNEE / 2, z, shell);
+  }
+  function kneePanel(side, z0, z1) {
+    quad([side * HI, 0, z0], [side * HI, 0, z1], [side * HI, KNEE, z1], [side * HI, KNEE, z0], M.white, 1, 1);
+  }
+  function bay(side, z0, z1, kind) {
+    if (kind === 'panel') kneePanel(side, z0, z1);
+    if (kind === 'curtain') curtain(z1 - z0 - 0.1, KNEE - 0.03, 0, 0, 0, curtains, side * (HI - 0.02), (z0 + z1) / 2, Math.PI / 2);
+  }
+  // Höger sida sett mot fönstret (+x)
+  var right = [[0, 1.2, 'panel'], [1.2, 2.2, 'curtain'], [2.2, 3.1, 'open'], [3.1, 4.3, 'curtain'], [4.3, 5.5, 'curtain'], [5.5, 6.6, 'open'], [6.6, 7.8, 'open'], [7.8, 8, 'panel']];
+  // Vänster sida sett mot fönstret (-x)
+  var left = [[0, 1.2, 'panel'], [1.2, 2.3, 'panel'], [2.3, 3.3, 'open'], [3.3, 4.4, 'curtain'], [4.4, 5.5, 'curtain'], [5.5, 8, 'panel']];
+  [[1, right], [-1, left]].forEach(function (sb) {
+    sb[1].forEach(function (b, i) { bay(sb[0], b[0], b[1], b[2]); if (i > 0) divider(sb[0], b[0]); });
+  });
+
+  // ---------- Möbler (förenklade) ----------
+  // Dagbädd under fönstret
+  box(2.0, 0.22, 0.9, M.white, 0, 0.13, 0.5);
+  box(2.0, 0.2, 0.9, M.bed, 0, 0.34, 0.5);
+  box(1.3, 0.14, 0.6, M.bed, 0.2, 0.5, 0.42).rotation.y = 0.12;
+
+  // Runt soffbord
+  cyl(0.6, 0.6, 0.04, M.dark, -0.15, 0.4, 1.95, furniture, 48);
+  box(0.45, 0.38, 0.45, M.box, -0.15, 0.19, 1.95);
+
+  function wingChair(x, z, rotY) {
+    var g = new THREE.Group();
+    box(0.62, 0.2, 0.58, M.grey, 0, 0.36, 0.02, g);                                   // sits
+    var back = box(0.6, 0.72, 0.14, M.grey, 0, 0.7, -0.27, g); back.rotation.x = -0.14; // rygg
+    [-1, 1].forEach(function (s) {
+      box(0.1, 0.24, 0.6, M.grey, s * 0.33, 0.5, 0.0, g);                              // armstöd
+      var w = box(0.08, 0.42, 0.24, M.grey, s * 0.31, 0.84, -0.16, g); w.rotation.x = -0.14; // öron
+      cyl(0.02, 0.014, 0.26, M.black, s * 0.26, 0.13, 0.24, g, 8);
+      cyl(0.02, 0.014, 0.26, M.black, s * 0.26, 0.13, -0.24, g, 8);
+    });
+    g.position.set(x, 0, z); g.rotation.y = rotY; furniture.add(g);
+  }
+  wingChair(1.05, 2.0, -Math.PI / 3);
+  wingChair(-1.15, 2.35, Math.PI / 2 + 0.25);
+
+  // Byrå mitt i rummet med mörk bordsskiva lutad mot baksidan
+  box(0.9, 0.78, 0.45, M.white, -0.2, 0.42, 3.45);
+  [-1, 1].forEach(function (s) { box(0.04, 0.06, 0.04, M.white, -0.2 + s * 0.42, 0.015, 3.45); });
+  box(1.5, 0.72, 0.04, M.dark, -0.1, 0.93, 3.17);
+
+  // Matta
+  box(1.7, 0.012, 3.1, M.rug, -0.2, 0.006, 4.2);
+
+  // Vitrinskåp
+  (function () {
+    var g = new THREE.Group(), w = 0.36, d = 0.8, h = 1.15, t = 0.025;
+    [-1, 1].forEach(function (sx) { [-1, 1].forEach(function (sz) { box(t, h, t, M.black, sx * (w - t) / 2, h / 2, sz * (d - t) / 2, g); }); });
+    [0.05, h - t / 2].forEach(function (y) { box(w, t, d, M.black, 0, y, 0, g); });
+    [0.42, 0.78].forEach(function (y) { box(w - 0.03, 0.008, d - 0.03, M.glass, 0, y, 0, g); });
+    box(w - t, h - 0.08, d - t, M.glass, 0, h / 2, 0, g);
+    g.position.set(-0.95, 0, 4.95); furniture.add(g);
+  })();
+
+  // Ribbvägg (avskärmning) som följer takfallet
+  (function () {
+    var z = 5.62, xIn = -0.5, d = 0.03;
+    for (var y = 0.06; y < H(xIn) - 0.08; y += 0.125) {
+      var xOut = -Math.min(HI, HW * (1 - (y + 0.04 - EAVE) / (RIDGE - EAVE)));
+      box(xIn - xOut, 0.07, d, M.white, (xIn + xOut) / 2, y, z);
+    }
+    box(0.06, H(xIn) - 0.03, 0.06, M.white, xIn, (H(xIn) - 0.03) / 2, z);
+    box(0.06, KNEE, 0.06, M.white, -HI + 0.03, KNEE / 2, z);
+    var len = Math.hypot(HI + xIn, H(xIn) - KNEE);
+    var rail = box(len, 0.06, 0.06, M.white, (xIn - HI) / 2, (H(xIn) + KNEE) / 2 - 0.04, z);
+    rail.rotation.z = Math.atan2(H(xIn) - KNEE, HI + xIn);
+  })();
+
+  // Skrivbord med två skärmar
+  (function () {
+    var cx = -1.2, cz = 6.55, h = 0.72;
+    box(0.8, 0.03, 1.6, M.white, cx, h, cz);
+    [-0.6, 0.6].forEach(function (dz) {
+      box(0.06, h - 0.03, 0.05, M.white, cx, (h - 0.03) / 2, cz + dz);
+      box(0.68, 0.025, 0.07, M.white, cx, 0.012, cz + dz);
+    });
+    [-0.3, 0.3].forEach(function (dz) {
+      var m = box(0.025, 0.33, 0.56, M.black, cx - 0.1, h + 0.25, cz + dz); m.rotation.y = dz > 0 ? 0.12 : -0.12;
+    });
+    cyl(0.018, 0.018, 0.3, M.black, cx - 0.16, h + 0.15, cz, furniture, 8);
+    box(0.16, 0.02, 0.44, M.black, cx + 0.18, h + 0.025, cz + 0.05);   // tangentbord
+  })();
+
+  // Kontorsstol
+  (function () {
+    var g = new THREE.Group();
+    cyl(0.26, 0.22, 0.09, M.greyLight, 0, 0.46, 0, g, 24);
+    var shellBack = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.27, 0.34, 24, 1, true, Math.PI * 0.55, Math.PI * 0.9),
+      mat(0xb9b6b0, { side: THREE.DoubleSide }));
+    shellBack.position.set(0, 0.66, 0); g.add(shellBack);
+    cyl(0.025, 0.025, 0.34, M.white, 0, 0.25, 0, g, 10);
+    for (var i = 0; i < 5; i++) {
+      var a = i * Math.PI * 2 / 5, leg = box(0.3, 0.03, 0.04, M.white, Math.cos(a) * 0.15, 0.08, Math.sin(a) * 0.15, g);
+      leg.rotation.y = -a;
+      cyl(0.03, 0.03, 0.04, M.white, Math.cos(a) * 0.3, 0.03, Math.sin(a) * 0.3, g, 10).rotation.z = Math.PI / 2;
+    }
+    g.position.set(-0.35, 0, 6.5); g.rotation.y = -0.5; furniture.add(g);
+  })();
+
+  // Förvaring i de öppna facken
+  box(0.4, 0.3, 0.55, M.box, 1.95, 0.15, 2.65);
+  box(0.36, 0.27, 0.45, M.box, 1.92, 0.44, 2.6).rotation.y = 0.1;
+  box(0.36, 0.42, 0.3, mat(0x555a60), -1.95, 0.21, 2.8);          // kylbox
+  box(0.3, 0.6, 0.26, M.white, 1.85, 0.3, 5.8);                   // luftkylare
+  box(0.5, 0.26, 0.4, M.greyLight, 1.9, 0.13, 6.25);
+  box(0.42, 0.34, 0.5, mat(0x4f6b4a), 1.9, 0.17, 7.1);
+
+  // ---------- Måttsättning ----------
+  var css = getComputedStyle(document.documentElement);
+  var accent = new THREE.Color(css.getPropertyValue('--accent').trim());
+  var accentLin = accent.clone().convertSRGBToLinear();
+  var lineMat = new THREE.LineBasicMaterial({ color: accentLin });
+  function label(text, pos) {
+    var cv = document.createElement('canvas'); cv.width = 256; cv.height = 96;
+    var g = cv.getContext('2d');
+    g.fillStyle = '#' + accent.getHexString();
+    if (g.roundRect) { g.beginPath(); g.roundRect(8, 12, 240, 72, 16); g.fill(); } else g.fillRect(8, 12, 240, 72);
+    g.fillStyle = '#fff'; g.font = '600 44px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, 128, 50);
+    var t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding;
+    var s = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true }));
+    s.scale.set(0.8, 0.3, 1); s.position.copy(pos); s.renderOrder = 10; dims.add(s);
+  }
+  function dim(a, b, text, tick, at) {
+    var A = new THREE.Vector3().fromArray(a), B = new THREE.Vector3().fromArray(b), T = new THREE.Vector3().fromArray(tick);
+    var pts = [A, B, A.clone().add(T), A.clone().sub(T), B.clone().add(T), B.clone().sub(T)];
+    var g = new THREE.BufferGeometry().setFromPoints([pts[0], pts[1], pts[2], pts[3], pts[4], pts[5]]);
+    var l = new THREE.LineSegments(g, lineMat); l.renderOrder = 9; dims.add(l);
+    label(text, A.clone().lerp(B, at === undefined ? 0.5 : at));
+  }
+  dim([-HW, 0.02, -0.4], [HW, 0.02, -0.4], '450 cm', [0, 0, 0.1], 0.22);
+  dim([-HI, 0.02, -1.0], [HI, 0.02, -1.0], '330 cm', [0, 0, 0.1]);
+  dim([HW + 0.35, 0.02, 0], [HW + 0.35, 0.02, L], '800 cm', [0.1, 0, 0]);
+  dim([0, 0, -0.15], [0, RIDGE, -0.15], '220 cm', [0.1, 0, 0], 0.88);
+
+  // ---------- Kamera: egen enkel orbit-styrning ----------
+  var target = new THREE.Vector3(), sph = { r: 10, theta: 0, phi: 1 };
+  function applyCam() {
+    sph.phi = Math.min(Math.PI - 0.02, Math.max(0.02, sph.phi));
+    sph.r = Math.min(30, Math.max(0.3, sph.r));
+    camera.position.set(
+      target.x + sph.r * Math.sin(sph.phi) * Math.sin(sph.theta),
+      target.y + sph.r * Math.cos(sph.phi),
+      target.z + sph.r * Math.sin(sph.phi) * Math.cos(sph.theta));
+    camera.lookAt(target);
+  }
+  function setFrom(pos, tgt) {
+    target.copy(tgt);
+    var d = pos.clone().sub(tgt); sph.r = d.length();
+    sph.phi = Math.acos(d.y / sph.r); sph.theta = Math.atan2(d.x, d.z); applyCam();
+  }
+  var VIEWS = {
+    overview: [[7.5, 6.2, -3.5], [0, 0.5, 4.2]],
+    window: [[0.35, 1.45, 7.6], [0, 0.95, 2.5]],
+    desk: [[1.1, 1.4, 3.6], [-0.9, 0.7, 6.6]],
+    plan: [[0, 13.5, 4.01], [0, 0, 4]],
+    section: [[0, 1.3, -7.5], [0, 1.0, 4]]
+  };
+  var anim = null;
+  function goView(name, instant) {
+    var v = VIEWS[name], p1 = new THREE.Vector3().fromArray(v[0]), t1 = new THREE.Vector3().fromArray(v[1]);
+    [].forEach.call(document.querySelectorAll('#views button'), function (b) {
+      b.setAttribute('aria-pressed', b.dataset.view === name ? 'true' : 'false');
+    });
+    var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (instant || reduce) { anim = null; setFrom(p1, t1); return; }
+    anim = { p0: camera.position.clone(), t0: target.clone(), p1: p1, t1: t1, start: performance.now() };
+  }
+  document.getElementById('views').addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (b) goView(b.dataset.view);
+  });
+  function clearPressed() {
+    [].forEach.call(document.querySelectorAll('#views button'), function (b) { b.setAttribute('aria-pressed', 'false'); });
+  }
+
+  function pan(dx, dy) {
+    var k = sph.r * 0.0016;
+    var rightV = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 0);
+    var upV = new THREE.Vector3().setFromMatrixColumn(camera.matrix, 1);
+    target.addScaledVector(rightV, -dx * k).addScaledVector(upV, dy * k);
+  }
+  var ptrs = {}, lastPinch = 0, lastMid = null;
+  canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+  canvas.addEventListener('pointerdown', function (e) {
+    canvas.setPointerCapture(e.pointerId);
+    ptrs[e.pointerId] = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey };
+    lastPinch = 0; lastMid = null; anim = null;
+  });
+  canvas.addEventListener('pointermove', function (e) {
+    var p = ptrs[e.pointerId]; if (!p) return;
+    var dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
+    var ids = Object.keys(ptrs);
+    if (ids.length === 1) {
+      if (p.pan) pan(dx, dy); else { sph.theta -= dx * 0.006; sph.phi -= dy * 0.006; }
+    } else if (ids.length === 2) {
+      var a = ptrs[ids[0]], b = ptrs[ids[1]], dist = Math.hypot(a.x - b.x, a.y - b.y);
+      var mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      if (lastPinch) sph.r *= lastPinch / dist;
+      if (lastMid) pan(mid.x - lastMid.x, mid.y - lastMid.y);
+      lastPinch = dist; lastMid = mid;
+    }
+    clearPressed(); applyCam();
+  });
+  function up(e) { delete ptrs[e.pointerId]; lastPinch = 0; lastMid = null; }
+  canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+  canvas.addEventListener('wheel', function (e) {
+    e.preventDefault(); anim = null; sph.r *= Math.exp(e.deltaY * 0.0012); clearPressed(); applyCam();
+  }, { passive: false });
+
+  
+  document.getElementById('tFurn').addEventListener('change', function (e) { furniture.visible = e.target.checked; });
+  document.getElementById('tCurt').addEventListener('change', function (e) { curtains.visible = e.target.checked; });
+
+  function resize() {
+    var w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h, false); camera.aspect = w / h;
+    camera.fov = w < h ? 68 : 50; camera.updateProjectionMatrix();
+  }
+  window.addEventListener('resize', resize); resize();
+  goView('overview', true);
+
+  function frame(now) {
+    if (anim) {
+      var t = Math.min(1, (now - anim.start) / 700), e = t * t * (3 - 2 * t);
+      setFrom(anim.p0.clone().lerp(anim.p1, e), anim.t0.clone().lerp(anim.t1, e));
+      if (t >= 1) anim = null;
+    }
+    var c = camera.position;   // måtten visas bara när kameran är utanför rummet
+    var inside = c.z > 0 && c.z < L && Math.abs(c.x) < HW && c.y > 0 && c.y < H(c.x);
+    dims.visible = document.getElementById('tDims').checked && !inside;
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  window.__goView = goView;
+})();
+</script>
+</body>
+</html>
