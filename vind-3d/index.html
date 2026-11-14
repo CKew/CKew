@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vinden – 3D-modell</title>
+<title>Vinden – ren planlösning</title>
 <style>
   :root {
     --bg: #e9e6df; --panel: rgba(255,255,255,.9); --ink: #24262b; --muted: #666a73;
@@ -37,7 +37,7 @@
 <canvas id="c"></canvas>
 
 <div id="top" class="panel">
-  <h1>Vinden – 3D-modell, steg 1</h1>
+  <h1>Vinden – ren planlösning</h1>
   <div class="group" id="views">
     <button data-view="overview" aria-pressed="true">Översikt</button>
     <button data-view="window">Mot fönstret</button>
@@ -47,8 +47,9 @@
   </div>
   <div class="group">
     <label><input type="checkbox" id="tDims" checked> Mått</label>
-    <label><input type="checkbox" id="tFurn" checked> Möbler</label>
+    <label><input type="checkbox" id="tDesk" checked> Skrivbord</label>
     <label><input type="checkbox" id="tCurt" checked> Draperier</label>
+    <label><input type="checkbox" id="tScreen"> Ribbvägg</label>
   </div>
 </div>
 
@@ -159,20 +160,15 @@
     floor: mat(0xffffff, { map: texFloor }),
     white: mat(0xf3f1ec),
     whiteDS: mat(0xf3f1ec, { side: THREE.DoubleSide }),
-    dark: mat(0x3a2c26),
     black: mat(0x1c1c1e),
-    grey: mat(0x66717f),
-    greyLight: mat(0xb9b6b0),
-    rug: mat(0xcfcabd),
-    bed: mat(0xfafafa),
-    box: mat(0xc9a877),
-    glass: mat(0xbfd3dc, { transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false }),
     pane: new THREE.MeshBasicMaterial({ color: new THREE.Color(0xf4f6ee).convertSRGBToLinear() }),
     curtain: mat(0xffffff, { map: texCurtain, side: THREE.DoubleSide })
   };
 
-  var shell = new THREE.Group(), furniture = new THREE.Group(), curtains = new THREE.Group(), dims = new THREE.Group();
-  scene.add(shell, furniture, curtains, dims);
+  var shell = new THREE.Group(), desk = new THREE.Group(), screen = new THREE.Group(),
+      curtains = new THREE.Group(), dims = new THREE.Group();
+  scene.add(shell, desk, screen, curtains, dims);
+  screen.visible = false;   // ribbväggen är avstängd som standard i den rena planlösningen
 
   // ---------- Hjälpfunktioner ----------
   var INSIDE = new THREE.Vector3(0, 1, L / 2);
@@ -191,11 +187,11 @@
   }
   function box(w, h, d, material, x, y, z, parent) {
     var m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
-    m.position.set(x, y, z); (parent || furniture).add(m); return m;
+    m.position.set(x, y, z); (parent || desk).add(m); return m;
   }
   function cyl(rt, rb, h, material, x, y, z, parent, seg) {
     var m = new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg || 32), material);
-    m.position.set(x, y, z); (parent || furniture).add(m); return m;
+    m.position.set(x, y, z); (parent || desk).add(m); return m;
   }
 
   // ---------- Skal: golv, tak, gavlar ----------
@@ -283,60 +279,18 @@
     sb[1].forEach(function (b, i) { bay(sb[0], b[0], b[1], b[2]); if (i > 0) divider(sb[0], b[0]); });
   });
 
-  // ---------- Möbler (förenklade) ----------
-  // Dagbädd under fönstret
-  box(2.0, 0.22, 0.9, M.white, 0, 0.13, 0.5);
-  box(2.0, 0.2, 0.9, M.bed, 0, 0.34, 0.5);
-  box(1.3, 0.14, 0.6, M.bed, 0.2, 0.5, 0.42).rotation.y = 0.12;
-
-  // Runt soffbord
-  cyl(0.6, 0.6, 0.04, M.dark, -0.15, 0.4, 1.95, furniture, 48);
-  box(0.45, 0.38, 0.45, M.box, -0.15, 0.19, 1.95);
-
-  function wingChair(x, z, rotY) {
-    var g = new THREE.Group();
-    box(0.62, 0.2, 0.58, M.grey, 0, 0.36, 0.02, g);                                   // sits
-    var back = box(0.6, 0.72, 0.14, M.grey, 0, 0.7, -0.27, g); back.rotation.x = -0.14; // rygg
-    [-1, 1].forEach(function (s) {
-      box(0.1, 0.24, 0.6, M.grey, s * 0.33, 0.5, 0.0, g);                              // armstöd
-      var w = box(0.08, 0.42, 0.24, M.grey, s * 0.31, 0.84, -0.16, g); w.rotation.x = -0.14; // öron
-      cyl(0.02, 0.014, 0.26, M.black, s * 0.26, 0.13, 0.24, g, 8);
-      cyl(0.02, 0.014, 0.26, M.black, s * 0.26, 0.13, -0.24, g, 8);
-    });
-    g.position.set(x, 0, z); g.rotation.y = rotY; furniture.add(g);
-  }
-  wingChair(1.05, 2.0, -Math.PI / 3);
-  wingChair(-1.15, 2.35, Math.PI / 2 + 0.25);
-
-  // Byrå mitt i rummet med mörk bordsskiva lutad mot baksidan
-  box(0.9, 0.78, 0.45, M.white, -0.2, 0.42, 3.45);
-  [-1, 1].forEach(function (s) { box(0.04, 0.06, 0.04, M.white, -0.2 + s * 0.42, 0.015, 3.45); });
-  box(1.5, 0.72, 0.04, M.dark, -0.1, 0.93, 3.17);
-
-  // Matta
-  box(1.7, 0.012, 3.1, M.rug, -0.2, 0.006, 4.2);
-
-  // Vitrinskåp
-  (function () {
-    var g = new THREE.Group(), w = 0.36, d = 0.8, h = 1.15, t = 0.025;
-    [-1, 1].forEach(function (sx) { [-1, 1].forEach(function (sz) { box(t, h, t, M.black, sx * (w - t) / 2, h / 2, sz * (d - t) / 2, g); }); });
-    [0.05, h - t / 2].forEach(function (y) { box(w, t, d, M.black, 0, y, 0, g); });
-    [0.42, 0.78].forEach(function (y) { box(w - 0.03, 0.008, d - 0.03, M.glass, 0, y, 0, g); });
-    box(w - t, h - 0.08, d - t, M.glass, 0, h / 2, 0, g);
-    g.position.set(-0.95, 0, 4.95); furniture.add(g);
-  })();
-
+  // ---------- Inredning: endast skrivbordet (och ribbväggen som valbar) ----------
   // Ribbvägg (avskärmning) som följer takfallet
   (function () {
     var z = 5.62, xIn = -0.5, d = 0.03;
     for (var y = 0.06; y < H(xIn) - 0.08; y += 0.125) {
       var xOut = -Math.min(HI, HW * (1 - (y + 0.04 - EAVE) / (RIDGE - EAVE)));
-      box(xIn - xOut, 0.07, d, M.white, (xIn + xOut) / 2, y, z);
+      box(xIn - xOut, 0.07, d, M.white, (xIn + xOut) / 2, y, z, screen);
     }
-    box(0.06, H(xIn) - 0.03, 0.06, M.white, xIn, (H(xIn) - 0.03) / 2, z);
-    box(0.06, KNEE, 0.06, M.white, -HI + 0.03, KNEE / 2, z);
+    box(0.06, H(xIn) - 0.03, 0.06, M.white, xIn, (H(xIn) - 0.03) / 2, z, screen);
+    box(0.06, KNEE, 0.06, M.white, -HI + 0.03, KNEE / 2, z, screen);
     var len = Math.hypot(HI + xIn, H(xIn) - KNEE);
-    var rail = box(len, 0.06, 0.06, M.white, (xIn - HI) / 2, (H(xIn) + KNEE) / 2 - 0.04, z);
+    var rail = box(len, 0.06, 0.06, M.white, (xIn - HI) / 2, (H(xIn) + KNEE) / 2 - 0.04, z, screen);
     rail.rotation.z = Math.atan2(H(xIn) - KNEE, HI + xIn);
   })();
 
@@ -351,33 +305,9 @@
     [-0.3, 0.3].forEach(function (dz) {
       var m = box(0.025, 0.33, 0.56, M.black, cx - 0.1, h + 0.25, cz + dz); m.rotation.y = dz > 0 ? 0.12 : -0.12;
     });
-    cyl(0.018, 0.018, 0.3, M.black, cx - 0.16, h + 0.15, cz, furniture, 8);
+    cyl(0.018, 0.018, 0.3, M.black, cx - 0.16, h + 0.15, cz, desk, 8);
     box(0.16, 0.02, 0.44, M.black, cx + 0.18, h + 0.025, cz + 0.05);   // tangentbord
   })();
-
-  // Kontorsstol
-  (function () {
-    var g = new THREE.Group();
-    cyl(0.26, 0.22, 0.09, M.greyLight, 0, 0.46, 0, g, 24);
-    var shellBack = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.27, 0.34, 24, 1, true, Math.PI * 0.55, Math.PI * 0.9),
-      mat(0xb9b6b0, { side: THREE.DoubleSide }));
-    shellBack.position.set(0, 0.66, 0); g.add(shellBack);
-    cyl(0.025, 0.025, 0.34, M.white, 0, 0.25, 0, g, 10);
-    for (var i = 0; i < 5; i++) {
-      var a = i * Math.PI * 2 / 5, leg = box(0.3, 0.03, 0.04, M.white, Math.cos(a) * 0.15, 0.08, Math.sin(a) * 0.15, g);
-      leg.rotation.y = -a;
-      cyl(0.03, 0.03, 0.04, M.white, Math.cos(a) * 0.3, 0.03, Math.sin(a) * 0.3, g, 10).rotation.z = Math.PI / 2;
-    }
-    g.position.set(-0.35, 0, 6.5); g.rotation.y = -0.5; furniture.add(g);
-  })();
-
-  // Förvaring i de öppna facken
-  box(0.4, 0.3, 0.55, M.box, 1.95, 0.15, 2.65);
-  box(0.36, 0.27, 0.45, M.box, 1.92, 0.44, 2.6).rotation.y = 0.1;
-  box(0.36, 0.42, 0.3, mat(0x555a60), -1.95, 0.21, 2.8);          // kylbox
-  box(0.3, 0.6, 0.26, M.white, 1.85, 0.3, 5.8);                   // luftkylare
-  box(0.5, 0.26, 0.4, M.greyLight, 1.9, 0.13, 6.25);
-  box(0.42, 0.34, 0.5, mat(0x4f6b4a), 1.9, 0.17, 7.1);
 
   // ---------- Måttsättning ----------
   var css = getComputedStyle(document.documentElement);
@@ -481,8 +411,8 @@
     e.preventDefault(); anim = null; sph.r *= Math.exp(e.deltaY * 0.0012); clearPressed(); applyCam();
   }, { passive: false });
 
-  
-  document.getElementById('tFurn').addEventListener('change', function (e) { furniture.visible = e.target.checked; });
+  document.getElementById('tDesk').addEventListener('change', function (e) { desk.visible = e.target.checked; });
+  document.getElementById('tScreen').addEventListener('change', function (e) { screen.visible = e.target.checked; });
   document.getElementById('tCurt').addEventListener('change', function (e) { curtains.visible = e.target.checked; });
 
   function resize() {
