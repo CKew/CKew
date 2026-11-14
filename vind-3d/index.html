@@ -49,7 +49,7 @@
     <label><input type="checkbox" id="tDims" checked> Mått</label>
     <label><input type="checkbox" id="tDesk" checked> Skrivbord</label>
     <label><input type="checkbox" id="tCurt" checked> Draperier</label>
-    <label><input type="checkbox" id="tScreen"> Ribbvägg</label>
+    <label><input type="checkbox" id="tScreen" checked> Avskärmning</label>
   </div>
 </div>
 
@@ -168,7 +168,6 @@
   var shell = new THREE.Group(), desk = new THREE.Group(), screen = new THREE.Group(),
       curtains = new THREE.Group(), dims = new THREE.Group();
   scene.add(shell, desk, screen, curtains, dims);
-  screen.visible = false;   // ribbväggen är avstängd som standard i den rena planlösningen
 
   // ---------- Hjälpfunktioner ----------
   var INSIDE = new THREE.Vector3(0, 1, L / 2);
@@ -279,7 +278,7 @@
     sb[1].forEach(function (b, i) { bay(sb[0], b[0], b[1], b[2]); if (i > 0) divider(sb[0], b[0]); });
   });
 
-  // ---------- Inredning: endast skrivbordet (och ribbväggen som valbar) ----------
+  // ---------- Inredning: skrivbordet och avskärmningen till höger om det ----------
   // Ribbvägg (avskärmning) som följer takfallet
   (function () {
     var z = 5.62, xIn = -0.5, d = 0.03;
