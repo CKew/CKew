@@ -58,7 +58,8 @@
   </div>
   <div class="group" id="props" role="group" aria-label="Inredningsförslag">
     <span class="lbl">Förslag</span>
-    <button data-prop="f" aria-pressed="true">F · Sex platser</button>
+    <button data-prop="f" aria-pressed="true">F · Fåtölj på var sida</button>
+    <button data-prop="g">G · Hörnsoffa + fåtölj</button>
     <button data-prop="e">E · Som bilden</button>
     <button data-prop="d">D · Spelbord</button>
     <button data-prop="a">A · Låg soffa</button>
@@ -69,6 +70,8 @@
     <label><input type="checkbox" id="tDims" checked> Mått</label>
     <label><input type="checkbox" id="tFurn" checked> Möbler</label>
     <label id="lGame"><input type="checkbox" id="tGame"> Spelläge</label>
+    <label id="lPpl"><input type="checkbox" id="tPpl" checked> Personer</label>
+    <label id="lLow"><input type="checkbox" id="tLow"> Låga fåtöljer</label>
     <label><input type="checkbox" id="tCurt" checked> Draperier</label>
     <label><input type="checkbox" id="tEve" checked> Kvällsljus</label>
   </div>
@@ -455,7 +458,7 @@
   }
 
   // ---------- Inredningsförslag (TV:n mitt i rummet, sittplatser vid fönstret) ----------
-  var P = { a: new THREE.Group(), b: new THREE.Group(), c: new THREE.Group(), d: new THREE.Group(), e: new THREE.Group(), f: new THREE.Group() };
+  var P = { a: new THREE.Group(), b: new THREE.Group(), c: new THREE.Group(), d: new THREE.Group(), e: new THREE.Group(), f: new THREE.Group(), g: new THREE.Group() };
   Object.keys(P).forEach(function (k) { lounge.add(P[k]); });
   var TVZ = 4.0, TVX = -0.5;   // TV:n står till vänster om mitten, gången går förbi till höger
 
@@ -559,7 +562,7 @@
     for (var i = 0; i < 3; i++) { var a = i * 2.094; cyl(0.008, 0.008, h - 0.02, M.black, x + Math.cos(a) * r * 0.8, (h - 0.02) / 2, z + Math.sin(a) * r * 0.8, g, 6); }
   }
   // TV på låg ribbpanel som är fäst i golv och takstol, med mörk räfflad bänk under
-  function tvPanel(g, x, z, swivel) {
+  function tvPanel(g, x, z, swivel, ty) {
     var t = new THREE.Group(), top = H(x) - 0.01;
     box(0.07, top, 0.07, M.white, 0, top / 2, 0.08, t);
     for (var y = 0.42; y < 1.1; y += 0.125) box(1.3, 0.07, 0.02, M.white, 0, y, 0.03, t);
@@ -569,8 +572,8 @@
     box(1.23, 0.71, 0.035, M.black, 0, 0, 0, tv);
     var scr = new THREE.Mesh(new THREE.PlaneGeometry(1.19, 0.67), S2.tvImg);
     scr.position.set(0, 0, -0.019); scr.rotation.y = Math.PI; tv.add(scr);
-    tv.position.set(0, 0.78, swivel ? -0.24 : -0.045); tv.rotation.y = -(swivel || 0); t.add(tv);
-    if (swivel) box(0.05, 0.05, 0.22, M.black, 0, 0.78, -0.1, t);            // svängarm
+    tv.position.set(0, ty || 0.78, swivel ? -0.24 : -0.045); tv.rotation.y = -(swivel || 0); t.add(tv);
+    if (swivel) box(0.05, 0.05, 0.22, M.black, 0, ty || 0.78, -0.1, t);            // svängarm
     t.position.set(x, 0, z); g.add(t); return t;
   }
 
@@ -596,28 +599,78 @@
     tvPanel(g, TVX, TVZ);
   })(P.e);
 
-  // F – sex platser framför TV:n: fyrsitssoffa under fönstret och två fåtöljer längs högra sidan
-  var drumLowF, drumGameF;
+  // Sittsäck (låg golvfåtölj) och enkla figurer som visar var man sitter
+  function beanbag(g, x, z, material) {
+    var b = new THREE.Mesh(new THREE.SphereGeometry(0.45, 20, 14), material); b.scale.set(0.95, 0.42, 1); b.position.set(x, 0.17, z); g.add(b);
+    var r = new THREE.Mesh(new THREE.SphereGeometry(0.34, 18, 12), material); r.scale.set(1, 0.75, 0.55); r.position.set(x, 0.36, z - 0.3); g.add(r);
+  }
+  var pplMat = mat(0xd8c7b0), pplGroups = [];
+  function people(g, seats) {   // seats: [x, z, sitthöjd]
+    var pg = new THREE.Group(); g.add(pg); pplGroups.push(pg);
+    seats.forEach(function (a) {
+      cyl(0.19, 0.21, 0.5, pplMat, a[0], a[2] + 0.27, a[1], pg, 14);
+      var h = new THREE.Mesh(new THREE.SphereGeometry(0.105, 14, 10), pplMat); h.position.set(a[0], a[2] + 0.68, a[1]); pg.add(h);
+    });
+  }
+
+  // Låg loungefåtölj, ca 80 x 80 x 76 cm, sitthöjd 40 cm
+  function loungeChair(g, x, z, rotY, fabric) {
+    var c = new THREE.Group(), fw = fabric || S2.sand;
+    [-1, 1].forEach(function (k) { [-1, 1].forEach(function (j) { cyl(0.018, 0.014, 0.1, M.black, k * 0.33, 0.05, j * 0.3, c, 8); }); });
+    box(0.8, 0.22, 0.76, fw, 0, 0.21, 0.02, c);
+    box(0.58, 0.08, 0.6, fw, 0, 0.36, 0.08, c);
+    box(0.8, 0.46, 0.16, fw, 0, 0.53, -0.32, c).rotation.x = -0.18;
+    [-1, 1].forEach(function (k) { box(0.11, 0.24, 0.74, fw, k * 0.345, 0.44, 0.02, c); });
+    box(0.46, 0.28, 0.11, S2.olive, 0, 0.55, -0.2, c).rotation.x = -0.3;
+    c.position.set(x, 0, z); c.rotation.y = rotY; g.add(c); return c;
+  }
+  // Person i en fåtölj: 12 cm bakom fåtöljens mitt, sitthöjd enligt fåtöljtyp
+  function seatOf(x, z, rotY, seatH) { return [x - 0.12 * Math.sin(rotY), z - 0.12 * Math.cos(rotY), seatH]; }
+
+  // F – en fåtölj på var sida. Placeringarna är framräknade så att så mycket som möjligt av TV:n syns från alla platser.
+  var drumLowF, drumGameF, fWing = new THREE.Group(), fLow = new THREE.Group();
   (function (g) {
-    box(2.6, 0.02, 4.3, S2.shag, 0, 0.01, 2.85, g);                          // stor ryamatta
-    sofa(g, 0, 0.56, 2.72, 0.95, S2.taupe, S2.taupeLight, 4);                 // 4 platser, 60 cm vardera
-    pillow(g, -1.02, 0.62, 0.5, 0.3, S2.olive); pillow(g, 1.02, 0.62, 0.5, -0.3, S2.sand); pillow(g, 0.72, 0.6, 0.52, -0.1, S2.olive);
-    box(0.5, 0.02, 0.55, S2.moss, -0.92, 0.455, 0.72, g); box(0.5, 0.3, 0.02, S2.moss, -0.92, 0.3, 1.045, g);   // pläd
-    drumLowF = drumTable(g, -0.45, 1.9, 0.4, 0.42);
+    box(2.6, 0.02, 4.5, S2.shag, 0, 0.01, 2.95, g);
+    sofa(g, 0, 0.56, 2.72, 0.95, S2.taupe, S2.taupeLight, 4);
+    pillow(g, -1.02, 0.62, 0.5, 0.3, S2.olive); pillow(g, 1.02, 0.62, 0.5, -0.3, S2.sand);
+    drumLowF = drumTable(g, 0, 1.95, 0.4, 0.42);
     sprig(drumLowF, 0, 0.42, -0.08, 1.1); candle(drumLowF, -0.16, 0.42, 0.14); candle(drumLowF, 0.1, 0.42, 0.2); candle(drumLowF, 0.2, 0.42, 0.02);
-    drumGameF = drumTable(g, -0.45, 1.9, 0.4, 0.66);
+    drumGameF = drumTable(g, 0, 1.95, 0.4, 0.66);
     box(0.5, 0.012, 0.5, S2.olive, 0, 0.666, 0, drumGameF); box(0.26, 0.05, 0.18, F.rust, 0.02, 0.69, 0.02, drumGameF).rotation.y = 0.4;
     drumGameF.visible = false;
-    wingChair(g, 0.76, 2.05, -Math.PI / 2 + 0.25, S2.charcoal);               // fåtölj 1, vriden mot TV:n
-    wingChair(g, 0.73, 3.12, -Math.PI / 2 + 0.5, S2.charcoal);                // fåtölj 2, mer vriden mot TV:n
-    sideTable(g, 1.52, 0.5, 0.12, 0.5); candle(g, 1.5, 0.5, 0.47); candle(g, 1.55, 0.5, 0.56);
-    plant(g, -1.5, 0.32, 0.5);
-    pouf(g, -1.05, 2.85, 0.25, 0.36, S2.sand);
-    sideTable(g, 1.12, 4.02, 0.16, 0.5); lamp(g, 1.12, 4.02, 0.32, 0.5);
-    plant(g, -1.42, 3.7, 0.78); plant(g, 1.38, 4.75, 0.7);
-    candle(g, -1.3, 0, 3.15); candle(g, -1.4, 0, 3.26);
-    tvPanel(g, TVX, 4.62, 0.26);                                              // TV:n vriden ca 15° mot fåtöljerna
+    g.add(fWing, fLow);
+    wingChair(fWing, -0.86, 3.34, 0.19, S2.charcoal); wingChair(fWing, 0.82, 3.09, -0.17, S2.charcoal);
+    people(fWing, [seatOf(-0.86, 3.34, 0.19, 0.46), seatOf(0.82, 3.09, -0.17, 0.46)]);
+    loungeChair(fLow, -1.06, 2.84, 0.01, S2.sand); loungeChair(fLow, 0.86, 2.95, -0.39, S2.sand);
+    people(fLow, [seatOf(-1.06, 2.84, 0.01, 0.36), seatOf(0.86, 2.95, -0.39, 0.36)]);
+    fLow.visible = false;
+    sideTable(g, 1.35, 2.05, 0.16, 0.5); lamp(g, 1.35, 2.05, 0.3, 0.5);
+    plant(g, -1.42, 2.0, 0.75); sideTable(g, 1.52, 0.5, 0.12, 0.5); candle(g, 1.5, 0.5, 0.47); candle(g, 1.55, 0.5, 0.56);
+    plant(g, 1.45, 4.15, 0.7); plant(g, -1.3, 4.75, 0.6);
+    tvPanel(g, -0.24, 5.33, 0.07, 0.84);                                      // strax vänster om mitten, bildar avgränsning mot kontoret
+    people(g, [[-0.9, 0.66, 0.44], [-0.3, 0.66, 0.44], [0.3, 0.66, 0.44], [0.9, 0.66, 0.44]]);
   })(P.f);
+
+  // G – hörnsoffa med schäslong till vänster, en fåtölj till höger och en låg sittsäck framför schäslongen
+  var drumLowG, drumGameG;
+  (function (g) {
+    box(2.6, 0.02, 4.4, S2.shag, 0, 0.01, 2.95, g);
+    sofa(g, -0.15, 0.56, 2.9, 0.95, S2.taupe, S2.taupeLight, 4, 0.75);
+    pillow(g, 1.0, 0.62, 0.5, -0.3, S2.sand); pillow(g, 0.7, 0.6, 0.52, -0.1, S2.olive);
+    box(0.5, 0.02, 0.6, S2.moss, -1.12, 0.455, 1.45, g);                       // pläd på schäslongen
+    drumLowG = drumTable(g, -0.1, 1.95, 0.38, 0.42);
+    sprig(drumLowG, 0, 0.42, -0.08, 1.1); candle(drumLowG, -0.16, 0.42, 0.14); candle(drumLowG, 0.1, 0.42, 0.2);
+    drumGameG = drumTable(g, -0.1, 1.95, 0.38, 0.66);
+    box(0.5, 0.012, 0.5, S2.olive, 0, 0.666, 0, drumGameG); box(0.26, 0.05, 0.18, F.rust, 0.02, 0.69, 0.02, drumGameG).rotation.y = 0.4;
+    drumGameG.visible = false;
+    beanbag(g, -1.23, 2.32, S2.sand);
+    wingChair(g, 0.72, 3.27, -0.6, S2.charcoal);                              // vänd rakt mot TV:n
+    sideTable(g, 1.25, 1.55, 0.16, 0.5); lamp(g, 1.25, 1.55, 0.3, 0.5);
+    sideTable(g, 1.52, 0.5, 0.12, 0.5); candle(g, 1.5, 0.5, 0.47); candle(g, 1.55, 0.5, 0.56);
+    plant(g, -1.42, 3.6, 0.78); plant(g, 1.38, 4.6, 0.7);
+    tvPanel(g, -0.57, 5.4, 0.19, 0.78);                                        // vänster om mittgången, vriden ca 11° mot fåtöljen
+    people(g, [[-1.12, 0.66, 0.44], [-0.47, 0.66, 0.44], [0.17, 0.66, 0.44], [0.82, 0.66, 0.44], seatOf(0.72, 3.27, -0.6, 0.46), [-1.23, 2.22, 0.02]]);
+  })(P.g);
 
   var deskE = new THREE.Group(); scene.add(deskE);
   (function (g) {
@@ -667,11 +720,15 @@
   var DESC = {
     a: '<b>A · Låg soffa under fönstret.</b> Tresitssoffa med 65 cm hög rygg, alltså under fönsterbrädan (72 cm). TV:n står på en låg bänk mitt i rummet, cirka 3,4 m från sittplatsen.',
     b: '<b>B · Hörnsoffa med schäslong.</b> Soffan fyller gaveln och schäslongen ligger längs vänstra sidan, där det inte finns någon förvaring att komma åt. Ryggen är 65 cm hög.',
-    f: '<b>F · Sex platser framför TV:n.</b> Fyrsitssoffa (272 cm) under fönstret och de två fåtöljerna längs högra sidan, vridna mot TV:n. TV:n sitter på en svängarm på ribbpanelen och är vriden cirka 15° mot fåtöljerna, så alla sex ser den inom ungefär 30°. Runt bord Ø 80 cm som går att höja till spelbord.',
+    f: '<b>F · En fåtölj på var sida.</b> Fyrsitssoffa under fönstret och en fåtölj på var sida, vända mot TV:n. Med dina höga öronlappsfåtöljer skymmer den som sitter i fåtöljen en del av skärmen för soffplatserna bakom: längst till vänster syns cirka 60 %. Slå på <i>Låga fåtöljer</i> för att se samma upplägg där alla sex ser hela skärmen. TV-panelen avgränsar loungen mot kontoret.',
+    g: '<b>G · Hörnsoffa och en fåtölj.</b> Hörnsoffa under fönstret med schäslongen till vänster (fyra platser), en fåtölj till höger vänd rakt mot TV:n och en låg sittsäck framför schäslongen. Alla sex ser hela skärmen. TV:n sitter till vänster om mittgången, vriden cirka 11° mot fåtöljen.',
     e: '<b>E · Soffa och en fåtölj på var sida.</b> Rak soffa under fönstret och en fåtölj på var sida om det runda, mörka bordet (Ø 80 cm, går att höja till spelbord). TV:n sitter på en låg ribbpanel till vänster om mittgången. Färger, matta, växter och belysning följer din bild.',
     d: '<b>D · Hörnsoffa, två fåtöljer och spelbord.</b> Hörnsoffan står under fönstret med schäslongen åt vänster och fåtöljerna längs högra sidan. Bordet (60 × 110 cm) är höj- och sänkbart: 45 cm som soffbord, 68 cm som spelbord. TV:n sitter fast på en stolpe mellan golv och tak, till vänster om mittgången.',
     c: '<b>C · Fåtöljer vid fönstret.</b> De två öronlappsfåtöljerna du redan har står på var sin sida om fönstret med fotpallar, och det runda bordet står framför. Inget står framför själva fönstret.'
   };
+  var curProp = 'f';
+  // Skärmens mitt i respektive förslag, för vyn Från sittplatsen
+  var TVAIM = { a: [-0.5, 0.76, 3.98], b: [-0.5, 0.76, 3.98], c: [-0.5, 0.76, 3.98], d: [-0.5, 0.78, 3.96], e: [-0.5, 0.78, 3.96], f: [-0.24, 0.84, 5.09], g: [-0.57, 0.78, 5.16] };
   function setProp(k, fromHash) {
     if (!P[k]) k = 'f';
     Object.keys(P).forEach(function (n) { P[n].visible = n === k; });
@@ -679,21 +736,24 @@
       b.setAttribute('aria-pressed', b.dataset.prop === k ? 'true' : 'false');
     });
     document.getElementById('desc').innerHTML = DESC[k];
-    var styled = k === 'e' || k === 'f';   // förslagen i referensbildens stil
+    var styled = 'efg'.indexOf(k) >= 0;   // förslagen i referensbildens stil
     desk.visible = !styled; deskE.visible = styled;
     curtains.traverse(function (m) { if (m.isMesh) m.material = styled ? S2.linen : M.curtain; });
-    document.getElementById('lGame').hidden = 'def'.indexOf(k) < 0;
+    document.getElementById('lGame').hidden = 'defg'.indexOf(k) < 0;
+    document.getElementById('lPpl').hidden = 'fg'.indexOf(k) < 0;
+    document.getElementById('lLow').hidden = k !== 'f';
+    curProp = k;
     if (!fromHash) { try { location.hash = 'forslag-' + k; } catch (e) {} }
   }
-  function propFromHash() { var m = /^#forslag-([abcdef])$/.exec(location.hash || ''); return m ? m[1] : null; }
+  function propFromHash() { var m = /^#forslag-([a-g])$/.exec(location.hash || ''); return m ? m[1] : null; }
   document.getElementById('props').addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (b) setProp(b.dataset.prop);
   });
   window.addEventListener('hashchange', function () { var k = propFromHash(); if (k) setProp(k, true); });
   setProp(propFromHash() || 'f', true);
   document.getElementById('tGame').addEventListener('change', function (e) {
-    tableGame.visible = drumGame.visible = drumGameF.visible = e.target.checked;
-    tableLow.visible = drumLow.visible = drumLowF.visible = !e.target.checked;
+    tableGame.visible = drumGame.visible = drumGameF.visible = drumGameG.visible = e.target.checked;
+    tableLow.visible = drumLow.visible = drumLowF.visible = drumLowG.visible = !e.target.checked;
   });
   window.__setProp = setProp;
 
@@ -744,14 +804,15 @@
   var VIEWS = {
     overview: [[7.5, 6.2, -3.5], [0, 0.5, 4.2]],
     window: [[0.35, 1.45, 7.6], [0, 0.95, 2.5]],
-    sofa: [[-0.2, 1.0, 0.7], [-0.4, 0.75, 4.0]],
+    sofa: [[0, 1.08, 0.72], [-0.4, 0.75, 4.0]],
     desk: [[1.1, 1.4, 3.6], [-0.9, 0.7, 6.6]],
-    plan: [[0, 15.4, 3.37], [0, 0, 3.36]],
+    plan: [[0, 16.8, 3.01], [0, 0, 3.0]],
     section: [[0, 1.3, -7.5], [0, 1.0, 4]]
   };
   var anim = null;
   function goView(name, instant) {
     var v = VIEWS[name], p1 = new THREE.Vector3().fromArray(v[0]), t1 = new THREE.Vector3().fromArray(v[1]);
+    if (name === 'sofa' && TVAIM[curProp]) t1.fromArray(TVAIM[curProp]);
     // stående skärm: backa kameran så att hela rummet ryms i översikten
     if (name === 'overview' && window.innerWidth < window.innerHeight) p1.sub(t1).multiplyScalar(1.5).add(t1);
     [].forEach.call(document.querySelectorAll('#views button'), function (b) {
@@ -816,6 +877,10 @@
     M.pane.color.set(on ? 0x56688c : 0xf4f6ee).convertSRGBToLinear();
     document.body.style.background = on ? '#15110d' : '';
   }
+  document.getElementById('tLow').addEventListener('change', function (e) { fLow.visible = e.target.checked; fWing.visible = !e.target.checked; });
+  document.getElementById('tPpl').addEventListener('change', function (e) {
+    pplGroups.forEach(function (pg) { pg.visible = e.target.checked; });
+  });
   document.getElementById('tEve').addEventListener('change', function (e) { setEvening(e.target.checked); });
   setEvening(true);
   goView('window', true);
