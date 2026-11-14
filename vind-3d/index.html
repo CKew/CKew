@@ -28,13 +28,25 @@
   button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
   label { display: inline-flex; gap: 5px; align-items: center; cursor: pointer; user-select: none; }
   input[type=checkbox] { accent-color: var(--accent); }
-  label[hidden] { display: none; }
+  label[hidden], .group[hidden], #sight[hidden] { display: none; }
+  #fold { display: none; }
+  select { font: inherit; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-radius: 7px; padding: 4px 6px; max-width: 100%; }
+  #sight { display: grid; grid-template-columns: repeat(2, max-content); gap: 1px 18px; margin: 0 0 6px; font-size: 12.5px; color: var(--ink); }
+  #sight .t { grid-column: 1 / -1; color: var(--muted); margin-bottom: 2px; }
+  #sight .s { white-space: nowrap; }
+  #sight .s span { color: var(--muted); }
+  #sight .s.low b { color: var(--accent); }
   @media (max-width: 560px) {
     #top { padding: 8px; gap: 6px 8px; }
-    #top h1 { width: 100%; font-size: 14px; }
+    .head { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; }
+    #top h1 { font-size: 14px; }
+    #fold { display: inline-block; }
+    body.folded #top > .group, body.folded #desc { display: none; }
     button { padding: 4px 8px; font-size: 13px; }
     #info .hint { display: none; }
-    #desc { margin: 0; font-size: 12.5px; }
+    #desc { margin: 0 0 4px; font-size: 12.5px; }
+    select { font-size: 13px; padding: 3px 4px; }
+    #sight { gap: 1px 12px; font-size: 12px; }
   }
   #info { left: 12px; bottom: 12px; padding: 8px 12px; color: var(--muted); font-size: 12.5px; max-width: min(520px, calc(100% - 24px)); }
   #info b { color: var(--ink); font-weight: 600; }
@@ -47,7 +59,7 @@
 <canvas id="c"></canvas>
 
 <div id="top" class="panel">
-  <h1>Vinden – loungeförslag</h1>
+  <div class="head"><h1>Vinden – loungeförslag</h1><button id="fold" aria-expanded="true">Dölj menyer</button></div>
   <div class="group" id="views">
     <button data-view="overview" aria-pressed="true">Översikt</button>
     <button data-view="window">Mot fönstret</button>
@@ -58,13 +70,31 @@
   </div>
   <div class="group" id="props" role="group" aria-label="Inredningsförslag">
     <span class="lbl">Förslag</span>
-    <button data-prop="f" aria-pressed="true">F · Fåtölj på var sida</button>
-    <button data-prop="g">G · Hörnsoffa + fåtölj</button>
+    <button data-prop="g" aria-pressed="true">G · Hörnsoffa + fåtölj</button>
+    <button data-prop="f">F · Fåtölj på var sida</button>
     <button data-prop="e">E · Som bilden</button>
     <button data-prop="d">D · Spelbord</button>
     <button data-prop="a">A · Låg soffa</button>
     <button data-prop="b">B · Hörnsoffa</button>
     <button data-prop="c">C · Fåtöljer</button>
+  </div>
+  <div class="group" id="lab" hidden>
+    <span class="lbl">Labb</span>
+    <label>Bord <select id="selTable">
+      <option value="round">Runt räfflat, Ø 80</option>
+      <option value="lift">Höj- och sänkbart, 110 × 60</option>
+      <option value="nest">Satsbord, Ø 60 + Ø 42</option>
+      <option value="pouf">Puff med bricka, 100 × 65</option>
+      <option value="oval">Ovalt, 105 × 60</option>
+    </select></label>
+    <label>TV <select id="selTv">
+      <option value="panel">Ribbpanel med bänk, 55"</option>
+      <option value="wall55">Vägghängd på TV-vägg, 55"</option>
+      <option value="wall65">Vägghängd på TV-vägg, 65"</option>
+      <option value="ceiling">Takhängd, 55"</option>
+      <option value="stand">Rullstativ, 55"</option>
+      <option value="proj">Projektor och golvduk, 75"</option>
+    </select></label>
   </div>
   <div class="group">
     <label><input type="checkbox" id="tDims" checked> Mått</label>
@@ -79,6 +109,7 @@
 
 <div id="info" class="panel">
   <p id="desc"></p>
+  <div id="sight" hidden></div>
   <span class="hint"><b>800 × 450 cm</b>, 330 cm mellan draperierna, <b>220 cm</b> till nock.
   Dra för att rotera · skift/högerklick eller två fingrar för att panorera · scrolla/nyp för att zooma.</span>
 </div>
@@ -121,6 +152,7 @@
     var l = new THREE.PointLight(0xffa850, a[3], a[4], 1.6); l.position.set(a[0], a[1], a[2]); eveLights.add(l);   // bordslampa, ljus, klotlampa
   });
   var GLOW = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffd9a0).convertSRGBToLinear() });
+  var eveOnly = [];   // detaljer som bara syns i kvällsljus (bakgrundsljus, projektorns ljuskägla)
   [1.2, 2.6, 4.0, 5.4, 6.8].forEach(function (z) {
     var l = new THREE.PointLight(0xffb870, 0.5, 3.6, 2); l.position.set(0, 1.7, z); eveLights.add(l);
     var d = new THREE.Mesh(new THREE.CircleGeometry(0.06, 20), GLOW);
@@ -605,12 +637,14 @@
     var r = new THREE.Mesh(new THREE.SphereGeometry(0.34, 18, 12), material); r.scale.set(1, 0.75, 0.55); r.position.set(x, 0.36, z - 0.3); g.add(r);
   }
   var pplMat = mat(0xd8c7b0), pplGroups = [];
-  function people(g, seats) {   // seats: [x, z, sitthöjd]
+  function people(g, seats, seat0) {   // seats: [x, z, sitthöjd]; seat0 = numret på första platsen (för siktberäkningen)
     var pg = new THREE.Group(); g.add(pg); pplGroups.push(pg);
-    seats.forEach(function (a) {
-      cyl(0.19, 0.21, 0.5, pplMat, a[0], a[2] + 0.27, a[1], pg, 14);
+    seats.forEach(function (a, i) {
+      var t = cyl(0.19, 0.21, 0.5, pplMat, a[0], a[2] + 0.27, a[1], pg, 14);
       var h = new THREE.Mesh(new THREE.SphereGeometry(0.105, 14, 10), pplMat); h.position.set(a[0], a[2] + 0.68, a[1]); pg.add(h);
+      [t, h].forEach(function (m) { m.userData.person = true; if (seat0 !== undefined) m.userData.seat = seat0 + i; });
     });
+    return pg;
   }
 
   // Låg loungefåtölj, ca 80 x 80 x 76 cm, sitthöjd 40 cm
@@ -651,28 +685,156 @@
     people(g, [[-0.9, 0.66, 0.44], [-0.3, 0.66, 0.44], [0.3, 0.66, 0.44], [0.9, 0.66, 0.44]]);
   })(P.f);
 
-  // G – hörnsoffa med schäslong till vänster, en fåtölj till höger och en låg sittsäck framför schäslongen
-  var drumLowG, drumGameG;
+  // G – hörnsoffa + fåtölj, som labb: bord och TV-placering väljs i menyerna.
+  // Fåtöljens plats för varje TV-placering är framräknad så att så mycket som möjligt av skärmen syns från alla sex platser.
+  var G = { table: 'round', tv: 'panel', tables: {}, tvs: {} };
+  function tagSeat(grp, idx) { grp.traverse(function (o) { if (o.isMesh) o.userData.seat = idx; }); }
+  function findScreen(grp) { var f = null; grp.traverse(function (o) { if (o.isMesh && o.material === S2.tvImg) f = o; }); return f; }
+  function liftTable(g, x, z, w, d, h) {   // höj- och sänkbart bord med valnötsskiva
+    var t = new THREE.Group();
+    box(w, 0.035, d, S2.walnut, 0, h - 0.018, 0, t);
+    box(w * 0.7, 0.03, d * 0.55, M.black, 0, 0.015, 0, t);
+    [-1, 1].forEach(function (k) { box(0.05, h - 0.065, 0.05, M.black, k * w * 0.28, 0.03 + (h - 0.065) / 2, 0, t); });
+    t.position.set(x, 0, z); g.add(t); return t;
+  }
+  function nestTable(g, x, z, r, h) {   // runt satsbord med tre tunna ben
+    cyl(r, r, 0.025, S2.walnut, x, h - 0.0125, z, g, 36);
+    for (var i = 0; i < 3; i++) { var a = i * 2.094 + 0.5; cyl(0.01, 0.01, h - 0.025, M.black, x + Math.cos(a) * r * 0.75, (h - 0.025) / 2, z + Math.sin(a) * r * 0.75, g, 6); }
+  }
+  function tvBox(parent, w, h) {   // TV med ram; skärmens mitt i gruppens origo, framsidan mot -z
+    var t = new THREE.Group();
+    box(w + 0.04, h + 0.04, 0.035, M.black, 0, 0, 0, t);
+    var s = new THREE.Mesh(new THREE.PlaneGeometry(w, h), S2.tvImg); s.position.z = -0.019; s.rotation.y = Math.PI; t.add(s);
+    parent.add(t); return t;
+  }
+  var glowMat = (function () {   // varmt bakgrundsljus bakom vägghängd TV
+    var cv = document.createElement('canvas'); cv.width = cv.height = 128; var c2 = cv.getContext('2d');
+    var gr = c2.createRadialGradient(64, 64, 6, 64, 64, 64); gr.addColorStop(0, 'rgba(255,176,90,0.85)'); gr.addColorStop(1, 'rgba(255,176,90,0)');
+    c2.fillStyle = gr; c2.fillRect(0, 0, 128, 128);
+    var t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding;
+    return new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false });
+  })();
+  function tvWall(g, xEnd) {   // panelvägg från vänstra knäväggen till xEnd, upp till takfallet; framsidan vid z=5.41
+    var shp = new THREE.Shape();
+    shp.moveTo(-HI, 0); shp.lineTo(xEnd, 0); shp.lineTo(xEnd, H(xEnd) - 0.005);
+    if (xEnd > 0) shp.lineTo(0, RIDGE - 0.005);
+    shp.lineTo(-HI, H(HI) - 0.005); shp.closePath();
+    var m = new THREE.Mesh(new THREE.ExtrudeGeometry(shp, { depth: 0.08, bevelEnabled: false }), M.gable);
+    m.position.z = 5.41; g.add(m);
+    box(0.06, H(xEnd) - 0.01, 0.1, M.white, xEnd, (H(xEnd) - 0.01) / 2, 5.45, g);   // kantlist
+  }
+  function wallTv(g, xEnd, w, h, x, y, z, sw, shelfY) {   // TV-vägg + TV på vridbar väggarm + svävande hylla + bakgrundsljus
+    tvWall(g, xEnd);
+    var glow = new THREE.Mesh(new THREE.PlaneGeometry(w + 0.45, h + 0.3), glowMat);
+    glow.position.set(x, y, 5.405); glow.rotation.y = Math.PI; g.add(glow); eveOnly.push(glow);
+    box(w * 0.8, 0.15, 0.28, S2.drum, x - 0.05, shelfY, 5.27, g);
+    var t = tvBox(g, w, h); t.position.set(x, y, z); t.rotation.y = -sw;
+    box(0.05, 0.05, 5.41 - z - 0.02, M.black, x, y, (5.41 + z) / 2, g);   // väggarm
+  }
+
   (function (g) {
     box(2.6, 0.02, 4.4, S2.shag, 0, 0.01, 2.95, g);
     sofa(g, -0.15, 0.56, 2.9, 0.95, S2.taupe, S2.taupeLight, 4, 0.75);
     pillow(g, 1.0, 0.62, 0.5, -0.3, S2.sand); pillow(g, 0.7, 0.6, 0.52, -0.1, S2.olive);
     box(0.5, 0.02, 0.6, S2.moss, -1.12, 0.455, 1.45, g);                       // pläd på schäslongen
-    drumLowG = drumTable(g, -0.1, 1.95, 0.38, 0.42);
-    sprig(drumLowG, 0, 0.42, -0.08, 1.1); candle(drumLowG, -0.16, 0.42, 0.14); candle(drumLowG, 0.1, 0.42, 0.2);
-    drumGameG = drumTable(g, -0.1, 1.95, 0.38, 0.66);
-    box(0.5, 0.012, 0.5, S2.olive, 0, 0.666, 0, drumGameG); box(0.26, 0.05, 0.18, F.rust, 0.02, 0.69, 0.02, drumGameG).rotation.y = 0.4;
-    drumGameG.visible = false;
-    beanbag(g, -1.23, 2.32, S2.sand);
-    wingChair(g, 0.72, 3.27, -0.6, S2.charcoal);                              // vänd rakt mot TV:n
+    var bag = new THREE.Group(); g.add(bag); beanbag(bag, -1.23, 2.32, S2.sand); tagSeat(bag, 5);
     sideTable(g, 1.25, 1.55, 0.16, 0.5); lamp(g, 1.25, 1.55, 0.3, 0.5);
     sideTable(g, 1.52, 0.5, 0.12, 0.5); candle(g, 1.5, 0.5, 0.47); candle(g, 1.55, 0.5, 0.56);
     plant(g, -1.42, 3.6, 0.78); plant(g, 1.38, 4.6, 0.7);
-    tvPanel(g, -0.57, 5.4, 0.19, 0.78);                                        // vänster om mittgången, vriden ca 11° mot fåtöljen
-    people(g, [[-1.12, 0.66, 0.44], [-0.47, 0.66, 0.44], [0.17, 0.66, 0.44], [0.82, 0.66, 0.44], seatOf(0.72, 3.27, -0.6, 0.46), [-1.23, 2.22, 0.02]]);
+    people(g, [[-1.12, 0.66, 0.44], [-0.47, 0.66, 0.44], [0.17, 0.66, 0.44], [0.82, 0.66, 0.44]], 0);
+    people(g, [[-1.23, 2.22, 0.02]], 5);
+    G.chair = wingChair(g, 0.72, 3.27, -0.6, S2.charcoal);                      // flyttas och vänds mot skärmen i applyTv
+    people(G.chair, [[0, -0.12, 0.46]], 4); tagSeat(G.chair, 4);
+
+    // --- bord ---
+    function tableSet(key, low, game) { G.tables[key] = { low: low, game: game || null }; }
+    var rl = drumTable(g, -0.1, 1.95, 0.38, 0.42);
+    sprig(rl, 0, 0.42, -0.08, 1.1); candle(rl, -0.16, 0.42, 0.14); candle(rl, 0.1, 0.42, 0.2);
+    var rg = drumTable(g, -0.1, 1.95, 0.38, 0.66);
+    box(0.5, 0.012, 0.5, S2.olive, 0, 0.666, 0, rg); box(0.26, 0.05, 0.18, F.rust, 0.02, 0.69, 0.02, rg).rotation.y = 0.4;
+    tableSet('round', rl, rg);
+    var ll = liftTable(g, -0.1, 1.9, 1.1, 0.6, 0.45);
+    sprig(ll, -0.3, 0.45, 0, 1.0); candle(ll, 0.28, 0.45, 0.06); candle(ll, 0.38, 0.45, -0.07);
+    var lg = liftTable(g, -0.1, 1.9, 1.1, 0.6, 0.68);
+    box(0.5, 0.012, 0.5, S2.olive, -0.15, 0.686, 0, lg); box(0.28, 0.05, 0.2, F.rust, 0.33, 0.705, 0.05, lg).rotation.y = 0.3;
+    tableSet('lift', ll, lg);
+    var nl = new THREE.Group(); g.add(nl);
+    nestTable(nl, -0.25, 1.85, 0.3, 0.45); nestTable(nl, 0.22, 2.1, 0.21, 0.38);
+    sprig(nl, -0.33, 0.45, 1.8, 1.0); candle(nl, -0.12, 0.45, 1.95); candle(nl, 0.25, 0.38, 2.08);
+    tableSet('nest', nl);
+    var pl = new THREE.Group(); g.add(pl);
+    box(1.0, 0.3, 0.65, S2.olive, -0.1, 0.2, 1.95, pl); box(0.96, 0.06, 0.61, S2.olive, -0.1, 0.38, 1.95, pl);
+    [-1, 1].forEach(function (k) { [-1, 1].forEach(function (j) { cyl(0.02, 0.016, 0.05, M.black, -0.1 + k * 0.44, 0.025, 1.95 + j * 0.27, pl, 8); }); });
+    box(0.46, 0.03, 0.32, S2.walnut, 0.05, 0.425, 1.92, pl);
+    candle(pl, -0.02, 0.44, 1.9); candle(pl, 0.1, 0.44, 1.97); sprig(pl, 0.18, 0.44, 1.86, 0.8);
+    tableSet('pouf', pl);
+    var ol = new THREE.Group(); g.add(ol);
+    var otop = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.035, 48), S2.drumTop); otop.scale.set(1.05, 1, 0.6); otop.position.set(-0.1, 0.42, 1.9); ol.add(otop);
+    var obase = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.32, 0.4, 40), S2.drum); obase.scale.set(1.2, 1, 0.55); obase.position.set(-0.1, 0.2, 1.9); ol.add(obase);
+    sprig(ol, -0.3, 0.44, 1.88, 1.0); candle(ol, 0.05, 0.44, 1.95); candle(ol, 0.18, 0.44, 1.85);
+    tableSet('oval', ol);
+
+    // --- TV-placeringar (fåtöljens plats för varje placering) ---
+    function tvSet(key, grp, chair, hideRib) { G.tvs[key] = { group: grp, screen: findScreen(grp), chair: chair, hideRib: !!hideRib }; grp.visible = false; }
+    tvSet('panel', tvPanel(g, -0.57, 5.4, 0.19, 0.78), [0.72, 3.32]);
+    var w55 = new THREE.Group(); g.add(w55); wallTv(w55, 0.25, 1.19, 0.67, -0.447, 0.85, 5.15, 0.15, 0.32);
+    tvSet('wall55', w55, [0.765, 3.428], true);
+    var w65 = new THREE.Group(); g.add(w65); wallTv(w65, 0.42, 1.43, 0.8, -0.384, 0.75, 5.15, 0.15, 0.2);
+    tvSet('wall65', w65, [0.773, 3.335], true);
+    var cg = new THREE.Group(); g.add(cg);
+    var ct = tvBox(cg, 1.19, 0.67); ct.position.set(-0.454, 0.811, 5.239); ct.rotation.y = -0.12;
+    var topY = 0.811 + 0.355, roofY = H(-0.454);
+    box(0.05, roofY - topY, 0.05, M.black, -0.454, (roofY + topY) / 2, 5.27, cg);     // stång upp till takfallet
+    box(0.18, 0.02, 0.14, M.black, -0.454, roofY - 0.02, 5.27, cg);
+    tvSet('ceiling', cg, [0.741, 3.607]);
+    var sg = new THREE.Group(); g.add(sg); sg.position.set(-0.308, 0, 5.054); sg.rotation.y = -0.144;
+    var st = tvBox(sg, 1.19, 0.67); st.position.set(0, 0.95, 0);
+    [-1, 1].forEach(function (k) {
+      box(0.045, 1.22, 0.045, M.black, k * 0.3, 0.68, 0.05, sg);
+      [-1, 1].forEach(function (j) { cyl(0.035, 0.035, 0.03, M.black, k * 0.42, 0.035, 0.1 + j * 0.22, sg, 12).rotation.z = Math.PI / 2; });
+    });
+    box(0.9, 0.04, 0.55, M.black, 0, 0.08, 0.1, sg);                               // fot med hjul
+    box(0.7, 0.02, 0.32, S2.walnut, 0, 0.42, 0.06, sg);                             // hylla
+    tvSet('stand', sg, [0.765, 3.483]);
+    var pg2 = new THREE.Group(); g.add(pg2);
+    var px = -0.118, py = 0.834, pz = 5.129, pw = 1.66, ph = 0.93;
+    box(1.82, 0.14, 0.16, M.black, px, 0.07, pz + 0.04, pg2);                       // dukens kassett på golvet
+    box(pw + 0.06, py - ph / 2 - 0.14, 0.01, M.black, px, 0.14 + (py - ph / 2 - 0.14) / 2, pz + 0.01, pg2);
+    box(pw + 0.06, ph + 0.06, 0.01, M.white, px, py, pz + 0.008, pg2);
+    var img = new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), S2.tvImg); img.position.set(px, py, pz); img.rotation.y = Math.PI; pg2.add(img);
+    box(0.03, py + ph / 2 - 0.14, 0.03, M.black, px, 0.14 + (py + ph / 2 - 0.14) / 2, pz + 0.03, pg2);   // lyftarm bakom duken
+    box(0.32, 0.11, 0.26, M.white, px, 1.79, 2.6, pg2);                             // projektor under nocken
+    cyl(0.035, 0.035, 0.03, M.black, px + 0.08, 1.79, 2.745, pg2, 16).rotation.x = Math.PI / 2;
+    box(0.04, 0.03, 0.04, M.black, px, 1.86, 2.6, pg2);
+    var apex = [px + 0.08, 1.79, 2.76], bpos = [];
+    var corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(function (c) { return [px + c[0] * pw / 2, py + c[1] * ph / 2, pz - 0.01]; });
+    for (var i = 0; i < 4; i++) { bpos.push.apply(bpos, apex.concat(corners[i], corners[(i + 1) % 4])); }
+    var bgeo = new THREE.BufferGeometry(); bgeo.setAttribute('position', new THREE.Float32BufferAttribute(bpos, 3));
+    var beam = new THREE.Mesh(bgeo, new THREE.MeshBasicMaterial({ color: 0xfff0d0, transparent: true, opacity: 0.05, side: THREE.DoubleSide, depthWrite: false }));
+    pg2.add(beam); eveOnly.push(beam);
+    tvSet('proj', pg2, [0.79, 3.284]);
   })(P.g);
 
-  var deskE = new THREE.Group(); scene.add(deskE);
+  G.TVTXT = {
+    panel: 'TV:n (55 tum) sitter på en svängarm på en låg ribbpanel med bänk, till vänster om gången.',
+    wall55: 'En panelvägg från knäväggen till strax höger om mitten skiljer loungen från kontoret och ersätter ribbväggen. TV:n (55 tum) sitter på en vridbar väggarm, 25 cm ut från väggen, med en svävande hylla under.',
+    wall65: 'Samma TV-vägg, förlängd en bit förbi mitten, med en 65-tums TV. Större bild från soffan, men fåtöljen skymmer lite för soffplatsen längst till höger, och gången förbi väggen får cirka 1,7–1,8 m i takhöjd.',
+    ceiling: 'TV:n (55 tum) hänger i en stång från takfallet, så golvet under är fritt. Överkanten kan inte komma högre än cirka 1,15 m utan att TV:n slår i takfallet.',
+    stand: 'TV:n (55 tum) står på ett stativ med hjul, lite högre och närmare mitten, och kan rullas undan när gången behövs.',
+    proj: 'En portabel golvduk (75 tum) fälls upp ur en kassett på golvet, och projektorn hänger under nocken ovanför bordet. Störst bild, men när duken är uppe stänger den gången mot kontoret, och projektorn hänger cirka 1,75 m över golvet.'
+  };
+  G.TABTXT = {
+    round: 'Bordet är runt och räfflat, Ø 80 cm, och kan höjas till spelhöjd.',
+    lift: 'Bordet är höj- och sänkbart, 110 × 60 cm: 45 cm som soffbord och 68 cm som spelbord. Störst yta för brädspel.',
+    nest: 'Två satsbord, Ø 60 och Ø 42 cm, som kan dras isär.',
+    pouf: 'En stor puff, 100 × 65 cm, med bricka. Fungerar också som fotpall eller extraplats.',
+    oval: 'Ett ovalt bord, 105 × 60 cm, i mörkt trä.'
+  };
+  G.desc = function () {
+    return '<b>G · Hörnsoffa + fåtölj (labb).</b> Välj bord och TV-placering i menyerna; fåtöljen flyttas och vänds mot skärmen. ' + G.TVTXT[G.tv] + ' ' + G.TABTXT[G.table];
+  };
+
+  var deskE = new THREE.Group(), ribPlant; scene.add(deskE);
   (function (g) {
     var cx = -1.2, cz = 6.55, h = 0.74;
     box(0.8, 0.04, 1.6, S2.walnut, cx, h, cz, g);
@@ -687,7 +849,7 @@
     box(0.3, 0.006, 0.8, M.black, cx + 0.2, h + 0.023, cz, g);                               // skrivbordsunderlägg
     box(0.14, 0.02, 0.42, S2.charcoal, cx + 0.2, h + 0.036, cz + 0.03, g);                   // tangentbord
     var globe = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 12), GLOW); globe.position.set(cx + 0.1, h + 0.12, cz + 0.72); g.add(globe);
-    sprig(g, cx - 0.12, h + 0.02, cz - 0.7, 1.2); sprig(g, -0.62, 1.2, 5.55, 1.5);           // växt på bordet och hängande på ribbväggen
+    sprig(g, cx - 0.12, h + 0.02, cz - 0.7, 1.2); ribPlant = new THREE.Group(); g.add(ribPlant); sprig(ribPlant, -0.62, 1.2, 5.55, 1.5);           // växt på bordet och hängande på ribbväggen
     var c = new THREE.Group();                                                              // beige kontorsstol med svart fot
     cyl(0.26, 0.22, 0.09, S2.sand, 0, 0.46, 0, c, 24);
     var back = new THREE.Mesh(new THREE.CylinderGeometry(0.29, 0.27, 0.36, 24, 1, true, Math.PI * 0.55, Math.PI * 0.9), mat(0xcdbfa8, { side: THREE.DoubleSide }));
@@ -726,23 +888,26 @@
     d: '<b>D · Hörnsoffa, två fåtöljer och spelbord.</b> Hörnsoffan står under fönstret med schäslongen åt vänster och fåtöljerna längs högra sidan. Bordet (60 × 110 cm) är höj- och sänkbart: 45 cm som soffbord, 68 cm som spelbord. TV:n sitter fast på en stolpe mellan golv och tak, till vänster om mittgången.',
     c: '<b>C · Fåtöljer vid fönstret.</b> De två öronlappsfåtöljerna du redan har står på var sin sida om fönstret med fotpallar, och det runda bordet står framför. Inget står framför själva fönstret.'
   };
-  var curProp = 'f';
+  var curProp = 'g';
   // Skärmens mitt i respektive förslag, för vyn Från sittplatsen
   var TVAIM = { a: [-0.5, 0.76, 3.98], b: [-0.5, 0.76, 3.98], c: [-0.5, 0.76, 3.98], d: [-0.5, 0.78, 3.96], e: [-0.5, 0.78, 3.96], f: [-0.24, 0.84, 5.09], g: [-0.57, 0.78, 5.16] };
   function setProp(k, fromHash) {
-    if (!P[k]) k = 'f';
+    if (!P[k]) k = 'g';
     Object.keys(P).forEach(function (n) { P[n].visible = n === k; });
     [].forEach.call(document.querySelectorAll('#props button'), function (b) {
       b.setAttribute('aria-pressed', b.dataset.prop === k ? 'true' : 'false');
     });
-    document.getElementById('desc').innerHTML = DESC[k];
+    document.getElementById('desc').innerHTML = k === 'g' ? G.desc() : DESC[k];
     var styled = 'efg'.indexOf(k) >= 0;   // förslagen i referensbildens stil
     desk.visible = !styled; deskE.visible = styled;
     curtains.traverse(function (m) { if (m.isMesh) m.material = styled ? S2.linen : M.curtain; });
-    document.getElementById('lGame').hidden = 'defg'.indexOf(k) < 0;
+    document.getElementById('lGame').hidden = k === 'g' ? !G.tables[G.table].game : 'def'.indexOf(k) < 0;
     document.getElementById('lPpl').hidden = 'fg'.indexOf(k) < 0;
     document.getElementById('lLow').hidden = k !== 'f';
     curProp = k;
+    document.getElementById('lab').hidden = document.getElementById('sight').hidden = k !== 'g';
+    screen.visible = ribPlant.visible = !(k === 'g' && G.tvs[G.tv].hideRib);
+    if (k === 'g') { G.applyTv(G.tv); G.applyTable(G.table); }
     if (!fromHash) { try { location.hash = 'forslag-' + k; } catch (e) {} }
   }
   function propFromHash() { var m = /^#forslag-([a-g])$/.exec(location.hash || ''); return m ? m[1] : null; }
@@ -750,12 +915,78 @@
     var b = e.target.closest('button'); if (b) setProp(b.dataset.prop);
   });
   window.addEventListener('hashchange', function () { var k = propFromHash(); if (k) setProp(k, true); });
-  setProp(propFromHash() || 'f', true);
+  // ---------- Labbet i G: byt bord och TV, räkna ut hur mycket av skärmen varje plats ser ----------
+  G.applyTable = function (key) {
+    G.table = key; var game = document.getElementById('tGame').checked;
+    Object.keys(G.tables).forEach(function (n) {
+      var t = G.tables[n], on = n === key;
+      t.low.visible = on && !(game && t.game);
+      if (t.game) t.game.visible = on && game;
+    });
+    if (curProp === 'g') {
+      document.getElementById('lGame').hidden = !G.tables[key].game;
+      document.getElementById('desc').innerHTML = G.desc(); G.sight();
+    }
+  };
+  G.applyTv = function (key) {
+    G.tv = key;
+    Object.keys(G.tvs).forEach(function (n) { G.tvs[n].group.visible = n === key; });
+    var t = G.tvs[key]; scene.updateMatrixWorld(true);
+    var c = new THREE.Vector3().setFromMatrixPosition(t.screen.matrixWorld);
+    G.chair.position.set(t.chair[0], 0, t.chair[1]);
+    G.chair.rotation.y = Math.atan2(c.x - t.chair[0], c.z - t.chair[1]);
+    TVAIM.g = [c.x, c.y, c.z];
+    if (curProp === 'g') { screen.visible = ribPlant.visible = !t.hideRib; document.getElementById('desc').innerHTML = G.desc(); G.sight(); }
+  };
+  var SEATNAMES = ['Schäslong', 'Soffa 2', 'Soffa 3', 'Soffa 4', 'Fåtölj', 'Sittsäck'];
+  var ray = new THREE.Raycaster();
+  function shownIn(o, root) { for (; o && o !== root; o = o.parent) if (!o.visible) return false; return true; }
+  function inside(o, grp) { for (; o; o = o.parent) if (o === grp) return true; return false; }
+  G.eyes = function () {   // ögon strax framför huvudet på varje sittande figur
+    var e = [[-1.12, 0.66], [-0.47, 0.66], [0.17, 0.66], [0.82, 0.66]].map(function (a) { return new THREE.Vector3(a[0], 1.12, a[1] + 0.09); });
+    e.push(new THREE.Vector3(0, 1.14, -0.03).applyMatrix4(G.chair.matrixWorld));
+    e.push(new THREE.Vector3(-1.23, 0.7, 2.31));
+    return e;
+  };
+  G.sight = function () {
+    scene.updateMatrixWorld(true);
+    var t = G.tvs[G.tv], scr = t.screen, par = scr.geometry.parameters, occ = [];
+    P.g.traverse(function (o) { if (o.isMesh && !inside(o, t.group) && (o.userData.person || shownIn(o, P.g))) occ.push(o); });
+    var centre = new THREE.Vector3().setFromMatrixPosition(scr.matrixWorld);
+    var nrm = new THREE.Vector3(0, 0, 1).transformDirection(scr.matrixWorld); nrm.y = 0; nrm.normalize();
+    var pt = new THREE.Vector3(), dir = new THREE.Vector3(), rows = [], worst = 1;
+    G.eyes().forEach(function (e, si) {
+      var seen = 0, n = 0;
+      for (var i = 0; i < 13; i++) for (var j = 0; j < 7; j++) {
+        pt.set((i / 12 - 0.5) * par.width, (j / 6 - 0.5) * par.height, 0).applyMatrix4(scr.matrixWorld);
+        dir.subVectors(pt, e); var d = dir.length(); dir.divideScalar(d);
+        ray.set(e, dir); ray.far = d - 0.03;
+        var hit = ray.intersectObjects(occ, false).some(function (h) { return h.object.userData.seat !== si; });
+        n++; if (!hit) seen++;
+      }
+      var v = seen / n; worst = Math.min(worst, v);
+      var h = new THREE.Vector3(e.x - centre.x, 0, e.z - centre.z).normalize();
+      var a = Math.round(THREE.MathUtils.radToDeg(Math.acos(Math.min(1, h.dot(nrm)))));
+      rows.push('<div class="s' + (v < 0.95 ? ' low' : '') + '">' + SEATNAMES[si] + ' <b>' + Math.round(v * 100) + ' %</b> <span>' +
+        e.distanceTo(centre).toFixed(1).replace('.', ',') + ' m · ' + a + '°</span></div>');
+    });
+    document.getElementById('sight').innerHTML = '<div class="t">' + (worst > 0.995 ? 'Alla sex ser hela skärmen' : worst >= 0.95 ? 'Alla sex ser nästan hela skärmen' : 'Alla ser inte hela skärmen') +
+      ' (beräknat med alla sex på plats: synlig del, avstånd, vinkel):</div>' + rows.join('');
+    window.__sight = rows.length;
+  };
+  document.getElementById('selTable').addEventListener('change', function (e) { G.applyTable(e.target.value); });
+  document.getElementById('selTv').addEventListener('change', function (e) { G.applyTv(e.target.value); });
+  setProp(propFromHash() || 'g', true);
   document.getElementById('tGame').addEventListener('change', function (e) {
-    tableGame.visible = drumGame.visible = drumGameF.visible = drumGameG.visible = e.target.checked;
-    tableLow.visible = drumLow.visible = drumLowF.visible = drumLowG.visible = !e.target.checked;
+    tableGame.visible = drumGame.visible = drumGameF.visible = e.target.checked;
+    tableLow.visible = drumLow.visible = drumLowF.visible = !e.target.checked;
+    G.applyTable(G.table);
   });
-  window.__setProp = setProp;
+  document.getElementById('fold').addEventListener('click', function (e) {
+    var f = document.body.classList.toggle('folded');
+    e.target.setAttribute('aria-expanded', f ? 'false' : 'true'); e.target.textContent = f ? 'Visa menyer' : 'Dölj menyer';
+  });
+  window.__setProp = setProp; window.__G = G;
 
   // ---------- Måttsättning ----------
   var css = getComputedStyle(document.documentElement);
@@ -876,6 +1107,7 @@
   window.addEventListener('resize', resize); resize();
   function setEvening(on) {
     eveLights.visible = eveFx.visible = on; dayLights.visible = !on;
+    eveOnly.forEach(function (m) { m.visible = on; });
     M.pane.color.set(on ? 0x56688c : 0xf4f6ee).convertSRGBToLinear();
     document.body.style.background = on ? '#15110d' : '';
   }
