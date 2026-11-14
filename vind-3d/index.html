@@ -58,7 +58,8 @@
   </div>
   <div class="group" id="props" role="group" aria-label="Inredningsförslag">
     <span class="lbl">Förslag</span>
-    <button data-prop="e" aria-pressed="true">E · Som bilden</button>
+    <button data-prop="f" aria-pressed="true">F · Sex platser</button>
+    <button data-prop="e">E · Som bilden</button>
     <button data-prop="d">D · Spelbord</button>
     <button data-prop="a">A · Låg soffa</button>
     <button data-prop="b">B · Hörnsoffa</button>
@@ -454,7 +455,7 @@
   }
 
   // ---------- Inredningsförslag (TV:n mitt i rummet, sittplatser vid fönstret) ----------
-  var P = { a: new THREE.Group(), b: new THREE.Group(), c: new THREE.Group(), d: new THREE.Group(), e: new THREE.Group() };
+  var P = { a: new THREE.Group(), b: new THREE.Group(), c: new THREE.Group(), d: new THREE.Group(), e: new THREE.Group(), f: new THREE.Group() };
   Object.keys(P).forEach(function (k) { lounge.add(P[k]); });
   var TVZ = 4.0, TVX = -0.5;   // TV:n står till vänster om mitten, gången går förbi till höger
 
@@ -558,15 +559,18 @@
     for (var i = 0; i < 3; i++) { var a = i * 2.094; cyl(0.008, 0.008, h - 0.02, M.black, x + Math.cos(a) * r * 0.8, (h - 0.02) / 2, z + Math.sin(a) * r * 0.8, g, 6); }
   }
   // TV på låg ribbpanel som är fäst i golv och takstol, med mörk räfflad bänk under
-  function tvPanel(g, x, z) {
+  function tvPanel(g, x, z, swivel) {
     var t = new THREE.Group(), top = H(x) - 0.01;
     box(0.07, top, 0.07, M.white, 0, top / 2, 0.08, t);
     for (var y = 0.42; y < 1.1; y += 0.125) box(1.3, 0.07, 0.02, M.white, 0, y, 0.03, t);
     [-1, 1].forEach(function (k) { box(0.05, 1.16, 0.05, M.white, k * 0.63, 0.58, 0.035, t); });
     box(1.3, 0.3, 0.36, S2.drum, 0, 0.21, -0.03, t);
-    box(1.23, 0.71, 0.035, M.black, 0, 0.78, -0.045, t);
+    var tv = new THREE.Group();
+    box(1.23, 0.71, 0.035, M.black, 0, 0, 0, tv);
     var scr = new THREE.Mesh(new THREE.PlaneGeometry(1.19, 0.67), S2.tvImg);
-    scr.position.set(0, 0.78, -0.064); scr.rotation.y = Math.PI; t.add(scr);
+    scr.position.set(0, 0, -0.019); scr.rotation.y = Math.PI; tv.add(scr);
+    tv.position.set(0, 0.78, swivel ? -0.24 : -0.045); tv.rotation.y = -(swivel || 0); t.add(tv);
+    if (swivel) box(0.05, 0.05, 0.22, M.black, 0, 0.78, -0.1, t);            // svängarm
     t.position.set(x, 0, z); g.add(t); return t;
   }
 
@@ -591,6 +595,29 @@
     candle(g, -1.3, 0, 2.75); candle(g, -1.4, 0, 2.86);
     tvPanel(g, TVX, TVZ);
   })(P.e);
+
+  // F – sex platser framför TV:n: fyrsitssoffa under fönstret och två fåtöljer längs högra sidan
+  var drumLowF, drumGameF;
+  (function (g) {
+    box(2.6, 0.02, 4.3, S2.shag, 0, 0.01, 2.85, g);                          // stor ryamatta
+    sofa(g, 0, 0.56, 2.72, 0.95, S2.taupe, S2.taupeLight, 4);                 // 4 platser, 60 cm vardera
+    pillow(g, -1.02, 0.62, 0.5, 0.3, S2.olive); pillow(g, 1.02, 0.62, 0.5, -0.3, S2.sand); pillow(g, 0.72, 0.6, 0.52, -0.1, S2.olive);
+    box(0.5, 0.02, 0.55, S2.moss, -0.92, 0.455, 0.72, g); box(0.5, 0.3, 0.02, S2.moss, -0.92, 0.3, 1.045, g);   // pläd
+    drumLowF = drumTable(g, -0.45, 1.9, 0.4, 0.42);
+    sprig(drumLowF, 0, 0.42, -0.08, 1.1); candle(drumLowF, -0.16, 0.42, 0.14); candle(drumLowF, 0.1, 0.42, 0.2); candle(drumLowF, 0.2, 0.42, 0.02);
+    drumGameF = drumTable(g, -0.45, 1.9, 0.4, 0.66);
+    box(0.5, 0.012, 0.5, S2.olive, 0, 0.666, 0, drumGameF); box(0.26, 0.05, 0.18, F.rust, 0.02, 0.69, 0.02, drumGameF).rotation.y = 0.4;
+    drumGameF.visible = false;
+    wingChair(g, 0.76, 2.05, -Math.PI / 2 + 0.25, S2.charcoal);               // fåtölj 1, vriden mot TV:n
+    wingChair(g, 0.73, 3.12, -Math.PI / 2 + 0.5, S2.charcoal);                // fåtölj 2, mer vriden mot TV:n
+    sideTable(g, 1.52, 0.5, 0.12, 0.5); candle(g, 1.5, 0.5, 0.47); candle(g, 1.55, 0.5, 0.56);
+    plant(g, -1.5, 0.32, 0.5);
+    pouf(g, -1.05, 2.85, 0.25, 0.36, S2.sand);
+    sideTable(g, 1.12, 4.02, 0.16, 0.5); lamp(g, 1.12, 4.02, 0.32, 0.5);
+    plant(g, -1.42, 3.7, 0.78); plant(g, 1.38, 4.75, 0.7);
+    candle(g, -1.3, 0, 3.15); candle(g, -1.4, 0, 3.26);
+    tvPanel(g, TVX, 4.62, 0.26);                                              // TV:n vriden ca 15° mot fåtöljerna
+  })(P.f);
 
   var deskE = new THREE.Group(); scene.add(deskE);
   (function (g) {
@@ -640,30 +667,33 @@
   var DESC = {
     a: '<b>A · Låg soffa under fönstret.</b> Tresitssoffa med 65 cm hög rygg, alltså under fönsterbrädan (72 cm). TV:n står på en låg bänk mitt i rummet, cirka 3,4 m från sittplatsen.',
     b: '<b>B · Hörnsoffa med schäslong.</b> Soffan fyller gaveln och schäslongen ligger längs vänstra sidan, där det inte finns någon förvaring att komma åt. Ryggen är 65 cm hög.',
+    f: '<b>F · Sex platser framför TV:n.</b> Fyrsitssoffa (272 cm) under fönstret och de två fåtöljerna längs högra sidan, vridna mot TV:n. TV:n sitter på en svängarm på ribbpanelen och är vriden cirka 15° mot fåtöljerna, så alla sex ser den inom ungefär 30°. Runt bord Ø 80 cm som går att höja till spelbord.',
     e: '<b>E · Soffa och en fåtölj på var sida.</b> Rak soffa under fönstret och en fåtölj på var sida om det runda, mörka bordet (Ø 80 cm, går att höja till spelbord). TV:n sitter på en låg ribbpanel till vänster om mittgången. Färger, matta, växter och belysning följer din bild.',
     d: '<b>D · Hörnsoffa, två fåtöljer och spelbord.</b> Hörnsoffan står under fönstret med schäslongen åt vänster och fåtöljerna längs högra sidan. Bordet (60 × 110 cm) är höj- och sänkbart: 45 cm som soffbord, 68 cm som spelbord. TV:n sitter fast på en stolpe mellan golv och tak, till vänster om mittgången.',
     c: '<b>C · Fåtöljer vid fönstret.</b> De två öronlappsfåtöljerna du redan har står på var sin sida om fönstret med fotpallar, och det runda bordet står framför. Inget står framför själva fönstret.'
   };
   function setProp(k, fromHash) {
-    if (!P[k]) k = 'e';
+    if (!P[k]) k = 'f';
     Object.keys(P).forEach(function (n) { P[n].visible = n === k; });
     [].forEach.call(document.querySelectorAll('#props button'), function (b) {
       b.setAttribute('aria-pressed', b.dataset.prop === k ? 'true' : 'false');
     });
     document.getElementById('desc').innerHTML = DESC[k];
-    desk.visible = k !== 'e'; deskE.visible = k === 'e';
-    curtains.traverse(function (m) { if (m.isMesh) m.material = k === 'e' ? S2.linen : M.curtain; });
-    document.getElementById('lGame').hidden = k !== 'd' && k !== 'e';
+    var styled = k === 'e' || k === 'f';   // förslagen i referensbildens stil
+    desk.visible = !styled; deskE.visible = styled;
+    curtains.traverse(function (m) { if (m.isMesh) m.material = styled ? S2.linen : M.curtain; });
+    document.getElementById('lGame').hidden = 'def'.indexOf(k) < 0;
     if (!fromHash) { try { location.hash = 'forslag-' + k; } catch (e) {} }
   }
-  function propFromHash() { var m = /^#forslag-([abcde])$/.exec(location.hash || ''); return m ? m[1] : null; }
+  function propFromHash() { var m = /^#forslag-([abcdef])$/.exec(location.hash || ''); return m ? m[1] : null; }
   document.getElementById('props').addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (b) setProp(b.dataset.prop);
   });
   window.addEventListener('hashchange', function () { var k = propFromHash(); if (k) setProp(k, true); });
-  setProp(propFromHash() || 'e', true);
+  setProp(propFromHash() || 'f', true);
   document.getElementById('tGame').addEventListener('change', function (e) {
-    tableGame.visible = drumGame.visible = e.target.checked; tableLow.visible = drumLow.visible = !e.target.checked;
+    tableGame.visible = drumGame.visible = drumGameF.visible = e.target.checked;
+    tableLow.visible = drumLow.visible = drumLowF.visible = !e.target.checked;
   });
   window.__setProp = setProp;
 
@@ -804,6 +834,7 @@
   }
   requestAnimationFrame(frame);
   window.__goView = goView;
+  window.__setFrom = function (p, t) { anim = null; setFrom(new THREE.Vector3().fromArray(p), new THREE.Vector3().fromArray(t)); };
 })();
 </script>
 </body>
