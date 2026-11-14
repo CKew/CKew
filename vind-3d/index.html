@@ -813,6 +813,8 @@
   function goView(name, instant) {
     var v = VIEWS[name], p1 = new THREE.Vector3().fromArray(v[0]), t1 = new THREE.Vector3().fromArray(v[1]);
     if (name === 'sofa' && TVAIM[curProp]) t1.fromArray(TVAIM[curProp]);
+    // i F och G står TV:n längre bort och skymmer skrivbordet, så kameran ställs förbi TV:n
+    if (name === 'desk' && (curProp === 'f' || curProp === 'g')) { p1.set(0.55, 1.5, 5.8); t1.set(-1.2, 0.75, 6.8); }
     // stående skärm: backa kameran så att hela rummet ryms i översikten
     if (name === 'overview' && window.innerWidth < window.innerHeight) p1.sub(t1).multiplyScalar(1.5).add(t1);
     [].forEach.call(document.querySelectorAll('#views button'), function (b) {
