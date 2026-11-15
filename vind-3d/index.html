@@ -46,7 +46,8 @@
     #info .hint { display: none; }
     #desc { margin: 0 0 4px; font-size: 12.5px; }
     select { font-size: 13px; padding: 3px 4px; }
-    #sight { gap: 1px 12px; font-size: 12px; }
+    #sight { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px 10px; font-size: 11.5px; }
+    #sight .s { white-space: normal; }
   }
   #info { left: 12px; bottom: 12px; padding: 8px 12px; color: var(--muted); font-size: 12.5px; max-width: min(520px, calc(100% - 24px)); }
   #info b { color: var(--ink); font-weight: 600; }
@@ -71,6 +72,7 @@
   <div class="group" id="props" role="group" aria-label="Inredningsförslag">
     <span class="lbl">Förslag</span>
     <button data-prop="g" aria-pressed="true">G · Hörnsoffa + fåtölj</button>
+    <button data-prop="h">H · Pyssel + säng</button>
     <button data-prop="f">F · Fåtölj på var sida</button>
     <button data-prop="e">E · Som bilden</button>
     <button data-prop="d">D · Spelbord</button>
@@ -490,7 +492,7 @@
   }
 
   // ---------- Inredningsförslag (TV:n mitt i rummet, sittplatser vid fönstret) ----------
-  var P = { a: new THREE.Group(), b: new THREE.Group(), c: new THREE.Group(), d: new THREE.Group(), e: new THREE.Group(), f: new THREE.Group(), g: new THREE.Group() };
+  var P = { a: new THREE.Group(), b: new THREE.Group(), c: new THREE.Group(), d: new THREE.Group(), e: new THREE.Group(), f: new THREE.Group(), g: new THREE.Group(), h: new THREE.Group() };
   Object.keys(P).forEach(function (k) { lounge.add(P[k]); });
   var TVZ = 4.0, TVX = -0.5;   // TV:n står till vänster om mitten, gången går förbi till höger
 
@@ -737,12 +739,12 @@
     sofa(g, -0.15, 0.56, 2.9, 0.95, S2.taupe, S2.taupeLight, 4, 0.75);
     pillow(g, 1.0, 0.62, 0.5, -0.3, S2.sand); pillow(g, 0.7, 0.6, 0.52, -0.1, S2.olive);
     box(0.5, 0.02, 0.6, S2.moss, -1.12, 0.455, 1.45, g);                       // pläd på schäslongen
-    var bag = new THREE.Group(); g.add(bag); beanbag(bag, -1.23, 2.32, S2.sand); tagSeat(bag, 5);
+    var bag = new THREE.Group(); g.add(bag); G.bag = bag; beanbag(bag, -1.23, 2.32, S2.sand); plant(bag, -1.42, 3.6, 0.78); tagSeat(bag, 5);
     sideTable(g, 1.25, 1.55, 0.16, 0.5); lamp(g, 1.25, 1.55, 0.3, 0.5);
     sideTable(g, 1.52, 0.5, 0.12, 0.5); candle(g, 1.5, 0.5, 0.47); candle(g, 1.55, 0.5, 0.56);
-    plant(g, -1.42, 3.6, 0.78); plant(g, 1.38, 4.6, 0.7);
+    plant(g, 1.38, 4.6, 0.7);
     people(g, [[-1.12, 0.66, 0.44], [-0.47, 0.66, 0.44], [0.17, 0.66, 0.44], [0.82, 0.66, 0.44]], 0);
-    people(g, [[-1.23, 2.22, 0.02]], 5);
+    people(bag, [[-1.23, 2.22, 0.02]], 5);
     G.chair = wingChair(g, 0.72, 3.27, -0.6, S2.charcoal);                      // flyttas och vänds mot skärmen i applyTv
     people(G.chair, [[0, -0.12, 0.46]], 4); tagSeat(G.chair, 4);
 
@@ -834,6 +836,64 @@
     return '<b>G · Hörnsoffa + fåtölj (labb).</b> Välj bord och TV-placering i menyerna; fåtöljen flyttas och vänds mot skärmen. ' + G.TVTXT[G.tv] + ' ' + G.TABTXT[G.table];
   };
 
+  // H – som G, men sittsäcken byts mot dagbädden längs vänstra sidan och en pysselhörna står vid dörren.
+  // Visas tillsammans med G:s möbler (P.g), så att bord- och TV-labbet fungerar även här.
+  var HP = { visited: false, eye: new THREE.Vector3(-1.1, 0.86, 2.42) };
+  (function (h) {
+    var bedMat = mat(0xefe9df);
+    // dagbädd 90 x 200 under takfallet (takhöjd ca 0,8 m vid väggsidan, 1,5 m vid innerkanten)
+    var bed = new THREE.Group(); h.add(bed);
+    box(0.95, 0.28, 2.05, M.white, -1.15, 0.16, 3.0, bed);
+    box(0.9, 0.16, 2.0, bedMat, -1.15, 0.38, 3.0, bed);
+    box(0.86, 0.07, 1.35, S2.taupeLight, -1.15, 0.495, 3.3, bed);
+    box(0.88, 0.02, 0.55, S2.moss, -1.15, 0.54, 3.6, bed);
+    box(0.6, 0.14, 0.38, bedMat, -1.15, 0.55, 2.2, bed).rotation.x = -0.35;
+    box(0.45, 0.12, 0.3, S2.olive, -0.98, 0.6, 2.36, bed).rotation.x = -0.4;
+    tagSeat(bed, 5);
+    // halvliggande person på dagbädden (räknas som sjätte platsen)
+    var pg = new THREE.Group(); h.add(pg); pplGroups.push(pg);
+    var head = new THREE.Mesh(new THREE.SphereGeometry(0.105, 14, 10), pplMat); head.position.set(-1.1, 0.84, 2.32); pg.add(head);
+    var torso = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 0.55, 14), pplMat); torso.position.set(-1.1, 0.64, 2.68); torso.rotation.x = -1.24; pg.add(torso);
+    var legs = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.12, 0.85, 12), pplMat); legs.position.set(-1.1, 0.58, 3.38); legs.rotation.x = Math.PI / 2; pg.add(legs);
+    [head, torso, legs].forEach(function (m) { m.userData.person = true; m.userData.seat = 5; });
+    plant(h, -1.45, 4.6, 0.7);
+
+    // pysselhörna vid gaveln, till höger om dörren: bord 100 x 70, pegboard, lampa, rullvagn och stol
+    var c = new THREE.Group(); h.add(c);
+    var tx = 1.0, tz = 7.55;
+    box(1.0, 0.035, 0.7, F.oak, tx, 0.74, tz, c);
+    [-1, 1].forEach(function (k) { [-1, 1].forEach(function (j) { box(0.04, 0.72, 0.04, M.white, tx + k * 0.46, 0.36, tz + j * 0.31, c); }); });
+    box(0.55, 0.005, 0.42, S2.olive, tx - 0.15, 0.76, tz - 0.05, c);                 // skärmatta
+    box(0.3, 0.03, 0.21, M.white, tx + 0.22, 0.773, tz + 0.12, c).rotation.y = 0.2;  // papper
+    [[0.3, 0.2, F.mustard], [0.38, 0.24, F.sage], [0.34, 0.12, F.rust]].forEach(function (a) { cyl(0.035, 0.035, 0.12, a[2], tx + a[0], 0.82, tz + a[1], c, 12); });
+    lamp(c, tx - 0.38, tz + 0.22, 0.38, 0.757);
+    var peg = (function () {
+      var cv = document.createElement('canvas'); cv.width = cv.height = 128; var g2 = cv.getContext('2d');
+      g2.fillStyle = '#e6d9bf'; g2.fillRect(0, 0, 128, 128); g2.fillStyle = '#8f7f66';
+      for (var i = 6; i < 128; i += 12) for (var j = 6; j < 128; j += 12) { g2.beginPath(); g2.arc(i, j, 1.8, 0, 7); g2.fill(); }
+      var t = new THREE.CanvasTexture(cv); t.encoding = THREE.sRGBEncoding; return mat(0xffffff, { map: t });
+    })();
+    box(0.45, 0.4, 0.015, peg, 0.78, 1.08, 7.985, c);                                // pegboard på gaveln
+    box(0.03, 0.13, 0.01, M.black, 0.64, 1.1, 7.97, c); box(0.12, 0.03, 0.03, F.rust, 0.8, 1.18, 7.965, c);
+    cyl(0.04, 0.04, 0.03, F.mustard, 0.92, 1.0, 7.965, c, 14).rotation.x = Math.PI / 2;
+    var ch = new THREE.Group(); c.add(ch); ch.position.set(0.95, 0, 6.95);
+    box(0.42, 0.04, 0.4, M.white, 0, 0.45, 0, ch); box(0.42, 0.34, 0.03, M.white, 0, 0.66, -0.19, ch);
+    [-1, 1].forEach(function (k) { [-1, 1].forEach(function (j) { box(0.03, 0.45, 0.03, M.white, k * 0.18, 0.225, j * 0.17, ch); }); });
+    var tr = new THREE.Group(); c.add(tr); tr.position.set(1.25, 0, 6.6);              // rullvagn med pysselgrejer
+    [-1, 1].forEach(function (k) { [-1, 1].forEach(function (j) {
+      box(0.02, 0.74, 0.02, M.black, k * 0.2, 0.42, j * 0.15, tr);
+      cyl(0.025, 0.025, 0.02, M.black, k * 0.2, 0.025, j * 0.15, tr, 10).rotation.z = Math.PI / 2;
+    }); });
+    [0.2, 0.47, 0.74].forEach(function (y, i) {
+      box(0.42, 0.08, 0.32, F.sage, 0, y, 0, tr);
+      box(0.1, 0.06, 0.1, [F.rust, F.mustard, M.white][i], -0.1, y + 0.07, 0.03, tr);
+    });
+  })(P.h);
+  HP.desc = function () {
+    return '<b>H · Pyssel + säng.</b> Som G, men sittsäcken byts mot dagbädden (90 × 200 cm) längs vänstra sidan. Under takfallet räcker höjden för att ligga, men längst in går det inte att sitta upprätt; den blir en liggplats framför TV:n och en gästsäng. ' +
+      'Pysselbordet (100 × 70 cm) står vid gaveln till höger om dörren, med pegboard på väggen, bordslampa och rullvagn; gången från dörren hålls fri. ' + G.TVTXT[G.tv] + ' ' + G.TABTXT[G.table];
+  };
+
   var deskE = new THREE.Group(), ribPlant; scene.add(deskE);
   (function (g) {
     var cx = -1.2, cz = 6.55, h = 0.74;
@@ -893,24 +953,29 @@
   var TVAIM = { a: [-0.5, 0.76, 3.98], b: [-0.5, 0.76, 3.98], c: [-0.5, 0.76, 3.98], d: [-0.5, 0.78, 3.96], e: [-0.5, 0.78, 3.96], f: [-0.24, 0.84, 5.09], g: [-0.57, 0.78, 5.16] };
   function setProp(k, fromHash) {
     if (!P[k]) k = 'g';
-    Object.keys(P).forEach(function (n) { P[n].visible = n === k; });
+    var lab = k === 'g' || k === 'h';   // G och H delar möbler och labb
+    Object.keys(P).forEach(function (n) { P[n].visible = n === k || (k === 'h' && n === 'g'); });
+    G.bag.visible = k !== 'h';
     [].forEach.call(document.querySelectorAll('#props button'), function (b) {
       b.setAttribute('aria-pressed', b.dataset.prop === k ? 'true' : 'false');
     });
-    document.getElementById('desc').innerHTML = k === 'g' ? G.desc() : DESC[k];
-    var styled = 'efg'.indexOf(k) >= 0;   // förslagen i referensbildens stil
+    document.getElementById('desc').innerHTML = k === 'g' ? G.desc() : k === 'h' ? HP.desc() : DESC[k];
+    var styled = 'efgh'.indexOf(k) >= 0;   // förslagen i referensbildens stil
     desk.visible = !styled; deskE.visible = styled;
     curtains.traverse(function (m) { if (m.isMesh) m.material = styled ? S2.linen : M.curtain; });
-    document.getElementById('lGame').hidden = k === 'g' ? !G.tables[G.table].game : 'def'.indexOf(k) < 0;
-    document.getElementById('lPpl').hidden = 'fg'.indexOf(k) < 0;
+    document.getElementById('lGame').hidden = lab ? !G.tables[G.table].game : 'def'.indexOf(k) < 0;
+    document.getElementById('lPpl').hidden = 'fgh'.indexOf(k) < 0;
     document.getElementById('lLow').hidden = k !== 'f';
     curProp = k;
-    document.getElementById('lab').hidden = document.getElementById('sight').hidden = k !== 'g';
-    screen.visible = ribPlant.visible = !(k === 'g' && G.tvs[G.tv].hideRib);
-    if (k === 'g') { G.applyTv(G.tv); G.applyTable(G.table); }
+    document.getElementById('lab').hidden = document.getElementById('sight').hidden = !lab;
+    if (k === 'h' && !HP.visited) {   // första gången H visas: TV-väggen, så att pysselhörnan skärmas av från loungen
+      HP.visited = true; if (G.tv === 'panel') { G.tv = 'wall55'; document.getElementById('selTv').value = 'wall55'; }
+    }
+    screen.visible = ribPlant.visible = !(lab && G.tvs[G.tv].hideRib);
+    if (lab) { G.applyTv(G.tv); G.applyTable(G.table); }
     if (!fromHash) { try { location.hash = 'forslag-' + k; } catch (e) {} }
   }
-  function propFromHash() { var m = /^#forslag-([a-g])$/.exec(location.hash || ''); return m ? m[1] : null; }
+  function propFromHash() { var m = /^#forslag-([a-h])$/.exec(location.hash || ''); return m ? m[1] : null; }
   document.getElementById('props').addEventListener('click', function (e) {
     var b = e.target.closest('button'); if (b) setProp(b.dataset.prop);
   });
@@ -923,9 +988,9 @@
       t.low.visible = on && !(game && t.game);
       if (t.game) t.game.visible = on && game;
     });
-    if (curProp === 'g') {
+    if (curProp === 'g' || curProp === 'h') {
       document.getElementById('lGame').hidden = !G.tables[key].game;
-      document.getElementById('desc').innerHTML = G.desc(); G.sight();
+      document.getElementById('desc').innerHTML = curProp === 'h' ? HP.desc() : G.desc(); G.sight();
     }
   };
   G.applyTv = function (key) {
@@ -935,23 +1000,28 @@
     var c = new THREE.Vector3().setFromMatrixPosition(t.screen.matrixWorld);
     G.chair.position.set(t.chair[0], 0, t.chair[1]);
     G.chair.rotation.y = Math.atan2(c.x - t.chair[0], c.z - t.chair[1]);
-    TVAIM.g = [c.x, c.y, c.z];
-    if (curProp === 'g') { screen.visible = ribPlant.visible = !t.hideRib; document.getElementById('desc').innerHTML = G.desc(); G.sight(); }
+    TVAIM.g = TVAIM.h = [c.x, c.y, c.z];
+    if (curProp === 'g' || curProp === 'h') {
+      screen.visible = ribPlant.visible = !t.hideRib;
+      document.getElementById('desc').innerHTML = curProp === 'h' ? HP.desc() : G.desc(); G.sight();
+    }
   };
   var SEATNAMES = ['Schäslong', 'Soffa 2', 'Soffa 3', 'Soffa 4', 'Fåtölj', 'Sittsäck'];
   var ray = new THREE.Raycaster();
-  function shownIn(o, root) { for (; o && o !== root; o = o.parent) if (!o.visible) return false; return true; }
+  function shownIn(o, root) { for (; o && o !== root; o = o.parent) if (!o.visible && pplGroups.indexOf(o) < 0) return false; return true; }
   function inside(o, grp) { for (; o; o = o.parent) if (o === grp) return true; return false; }
   G.eyes = function () {   // ögon strax framför huvudet på varje sittande figur
     var e = [[-1.12, 0.66], [-0.47, 0.66], [0.17, 0.66], [0.82, 0.66]].map(function (a) { return new THREE.Vector3(a[0], 1.12, a[1] + 0.09); });
     e.push(new THREE.Vector3(0, 1.14, -0.03).applyMatrix4(G.chair.matrixWorld));
-    e.push(new THREE.Vector3(-1.23, 0.7, 2.31));
+    e.push(curProp === 'h' ? HP.eye.clone() : new THREE.Vector3(-1.23, 0.7, 2.31));
     return e;
   };
   G.sight = function () {
     scene.updateMatrixWorld(true);
     var t = G.tvs[G.tv], scr = t.screen, par = scr.geometry.parameters, occ = [];
-    P.g.traverse(function (o) { if (o.isMesh && !inside(o, t.group) && (o.userData.person || shownIn(o, P.g))) occ.push(o); });
+    (curProp === 'h' ? [P.g, P.h] : [P.g]).forEach(function (root) {
+      root.traverse(function (o) { if (o.isMesh && !inside(o, t.group) && shownIn(o, root)) occ.push(o); });
+    });
     var centre = new THREE.Vector3().setFromMatrixPosition(scr.matrixWorld);
     var nrm = new THREE.Vector3(0, 0, 1).transformDirection(scr.matrixWorld); nrm.y = 0; nrm.normalize();
     var pt = new THREE.Vector3(), dir = new THREE.Vector3(), rows = [], worst = 1;
@@ -967,7 +1037,7 @@
       var v = seen / n; worst = Math.min(worst, v);
       var h = new THREE.Vector3(e.x - centre.x, 0, e.z - centre.z).normalize();
       var a = Math.round(THREE.MathUtils.radToDeg(Math.acos(Math.min(1, h.dot(nrm)))));
-      rows.push('<div class="s' + (v < 0.95 ? ' low' : '') + '">' + SEATNAMES[si] + ' <b>' + Math.round(v * 100) + ' %</b> <span>' +
+      rows.push('<div class="s' + (v < 0.95 ? ' low' : '') + '">' + (si === 5 && curProp === 'h' ? 'Dagbädd' : SEATNAMES[si]) + ' <b>' + Math.round(v * 100) + ' %</b> <span>' +
         e.distanceTo(centre).toFixed(1).replace('.', ',') + ' m · ' + a + '°</span></div>');
     });
     document.getElementById('sight').innerHTML = '<div class="t">' + (worst > 0.995 ? 'Alla sex ser hela skärmen' : worst >= 0.95 ? 'Alla sex ser nästan hela skärmen' : 'Alla ser inte hela skärmen') +
@@ -1046,6 +1116,7 @@
     if (name === 'sofa' && TVAIM[curProp]) t1.fromArray(TVAIM[curProp]);
     // i F och G står TV:n längre bort och skymmer skrivbordet, så kameran ställs förbi TV:n
     if (name === 'desk' && (curProp === 'f' || curProp === 'g')) { p1.set(0.55, 1.5, 5.8); t1.set(-1.2, 0.75, 6.8); }
+    if (name === 'desk' && curProp === 'h') { p1.set(2.6, 3.4, 10.4); t1.set(-0.1, 0.45, 6.6); }   // genomskuren vy över skrivbord och pysselhörna
     // stående skärm: backa kameran så att hela rummet ryms i översikten
     if (name === 'overview' && window.innerWidth < window.innerHeight) p1.sub(t1).multiplyScalar(1.5).add(t1);
     [].forEach.call(document.querySelectorAll('#views button'), function (b) {
