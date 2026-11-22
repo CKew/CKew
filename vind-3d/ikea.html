@@ -41,11 +41,13 @@
     .head { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 8px; }
     #top h1 { font-size: 14px; }
     #fold { display: inline-block; }
-    body.folded #top > .group, body.folded #desc { display: none; }
+    body.folded #top > .group:not(#tvctl), body.folded #desc { display: none; }
     button { padding: 4px 8px; font-size: 13px; }
     #info .hint { display: none; }
     #desc { margin: 0 0 4px; font-size: 12.5px; }
     select { font-size: 13px; padding: 3px 4px; }
+    input[type=range] { width: 74px; }
+    #tvval { font-size: 12px; }
     #sight { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px 10px; font-size: 11.5px; }
     #sight .s { white-space: normal; }
   }
@@ -57,6 +59,8 @@
   #items { margin: 2px 0 6px; padding-left: 18px; max-height: 32vh; overflow: auto; color: var(--ink); }
   #items li { margin: 2px 0; }
   #note { margin: 0 0 6px; }
+  #tvval { margin: 0 0 6px; color: var(--ink); font-size: 12.5px; }
+  input[type=range] { width: 96px; accent-color: var(--accent); vertical-align: middle; }
   #err { position: fixed; inset: 0; display: none; place-items: center; padding: 24px; text-align: center; }
 </style>
 </head>
@@ -79,6 +83,14 @@
     <button data-prop="k2">2 · Mysig gästlounge</button>
     <button data-prop="k3">3 · Dagbädd och klaffbord</button>
   </div>
+  <div class="group" id="tvctl">
+    <span class="lbl">TV-stativ</span>
+    <label>Sidled <input type="range" id="tvX" min="-1" max="1" step="0.01"></label>
+    <label>Avstånd <input type="range" id="tvZ" min="2" max="7.6" step="0.01"></label>
+    <label>Vridning <input type="range" id="tvR" min="-40" max="40" step="1"></label>
+    <label>TV-höjd <input type="range" id="tvH" min="80" max="110" step="1"></label>
+    <button id="tvReset" type="button">Återställ</button>
+  </div>
   <div class="group">
     <label><input type="checkbox" id="tBed"> Sängläge</label>
     <label id="lCraft" hidden><input type="checkbox" id="tCraft"> Pysselläge</label>
@@ -92,9 +104,10 @@
 
 <div id="info" class="panel">
   <p id="desc"></p>
+  <p id="tvval"></p>
   <div id="sight"></div>
   <details id="list"><summary>Inköpslista (IKEA)</summary><ul id="items"></ul>
-    <p id="note">Möblerna är ritade med IKEA:s mått. TV:n och skärmarna är era egna. Kontrollera artikel och mått på ikea.se före köp – sortimentet ändras.</p></details>
+    <p id="note">Möblerna är ritade med IKEA:s mått. YXSTABY är förenklad: hur högt TV-fästet sitter har jag antagit (justera med TV-höjd). TV:n och skärmarna är era egna. Kontrollera artikel och mått på ikea.se före köp – sortimentet ändras.</p></details>
   <span class="hint"><b>800 × 450 cm</b>, 330 cm mellan draperierna, <b>220 cm</b> till nock.
   Dra för att rotera · skift/högerklick eller två fingrar för att panorera · scrolla/nyp för att zooma.</span>
 </div>
@@ -723,6 +736,25 @@
     return t;
   }
 
+  // YXSTABY TV-stativ på hjul (IKEA × Xbox): hylla 137 x 44 cm, höjd 113 cm, TV upp till 55 tum, låsbara hjul.
+  // TV:n monteras på stativets fäste; hylla under TV:n och en bakre hylla. Formen är förenklad och TV-höjden går att justera.
+  function yxstaby(parent, col) {
+    var t = grp(parent), shelfM = col === IK.white ? mat(0xe9e7e2) : mat(0x2a2a2c);
+    [-1, 1].forEach(function (k) { [-1, 1].forEach(function (j) {
+      cyl(0.035, 0.035, 0.03, M.black, k * 0.6, 0.035, j * 0.17, t, 12).rotation.z = Math.PI / 2;
+    }); });
+    [-1, 1].forEach(function (k) { box(0.05, 0.035, 0.44, col, k * 0.62, 0.085, 0, t); });
+    [-1, 1].forEach(function (k) { box(0.045, 1.02, 0.045, col, k * 0.62, 0.62, 0.08, t); });
+    box(1.285, 0.045, 0.045, col, 0, 1.108, 0.08, t);
+    box(1.37, 0.025, 0.44, shelfM, 0, 0.43, 0, t);
+    box(0.36, 0.06, 0.26, M.black, -0.3, 0.473, -0.02, t);
+    box(1.1, 0.02, 0.15, shelfM, 0, 0.76, 0.19, t);
+    t.tvg = grp(t);
+    box(0.5, 0.04, 0.03, col, 0, -0.14, 0.04, t.tvg); box(0.5, 0.04, 0.03, col, 0, 0.14, 0.04, t.tvg);
+    tvBox(t.tvg, 1.19, 0.67);
+    return t;
+  }
+
   // --- arbetsplatser ---
   function workbench(g, x0, x1, z0, z1, mid) {   // LAGKAPTEN bordsskiva 200 x 60 + ALEX lådhurts i mitten + ADILS ben
     var cx = (x0 + x1) / 2;
@@ -833,8 +865,7 @@
     var tb = listerby(g, -0.05, 1.95, true); sprig(tb, 0, 0.37, -0.1, 1.0); candle(tb, 0.15, 0.37, 0.12); candle(tb, -0.12, 0.37, 0.18);
     c.chairs = [ekero(g, 0.75, 3.3, IK.blue)];
     floorCushion(g, -1.2, 2.3); people(g, [[-1.2, 2.3, 0.16]], 5);
-    besta(g, -0.5, 5.1, IK.white);
-    c.tv = tv55(g, -0.5, 0.39, 5.07);
+    c.tv = yxstaby(g, IK.white); c.leftName = 'schäslongen';
     plant(g, -1.45, 4.5, 0.6);
     workbench(g, -1.4, -0.8, 5.95, 7.95, 6.95);
     screens2(g, -1.12, 6.4); officeChair(g, -0.48, 6.4, -Math.PI / 2, IK.greyDark);
@@ -855,7 +886,7 @@
       'Vid dörren blir kontor och pyssel en lång gemensam arbetsbänk längs vänstra sidan. Längs högra sidan står två stapelbara UTÅKER-sängar: en låg dagbädd på dagen och två gästsängar på natten (Sängläge).';
     c.items = ['<b>JÄTTEBO</b> modulsoffa, 4-sits med schäslong vänster – höjd 71 cm, djup 95 cm, schäslong 160 cm',
       '<b>EKERÖ</b> fåtölj – 70 × 73 × 75 cm', '<b>AROMATISK</b> golvkudde', '<b>LISTERBY</b> soffbord, ekfaner – Ø 90 cm, höjd 37 cm',
-      '<b>BESTÅ</b> TV-bänk, vit – 180 × 42 × 39 cm', '<b>LAGKAPTEN</b> bordsskiva 200 × 60 cm + <b>ALEX</b> lådhurts + <b>ADILS</b> ben',
+      '<b>YXSTABY</b> TV-stativ på hjul, vit – hylla 137 × 44 cm, höjd 113 cm, för TV upp till 55 tum, låsbara hjul', '<b>LAGKAPTEN</b> bordsskiva 200 × 60 cm + <b>ALEX</b> lådhurts + <b>ADILS</b> ben',
       '<b>FLINTAN</b> kontorsstol, <b>ODGER</b> stol, <b>FORSÅ</b> arbetslampa, <b>SKÅDIS</b> hålpanel 36 × 56 cm',
       '<b>RÅSKOG</b> rullvagn – 35 × 45 × 78 cm', '<b>UTÅKER</b> stapelbar säng × 2 med madrasser 80 × 200 – staplad 46 cm hög',
       '<b>STOENSE</b> matta, låg lugg – 200 × 300 cm', '<b>DYTÅG</b> gardiner för förvaringen, <b>FEJKA</b> krukväxter'];
@@ -874,8 +905,7 @@
     floorCushion(c.normal, -1.25, 1.95); people(c.normal, [[-1.25, 1.95, 0.16]], 5);
     people(c.normal, [[-1.22, 0.62, 0.44], [-0.61, 0.62, 0.44], [-0.13, 0.62, 0.44], [0.35, 0.62, 0.44]], 0);
     var sm = wingChair(g, 0.72, 3.32, -0.6, IK.greyMid); c.chairs = [sm]; people(sm, [[0, -0.12, 0.46]], 4); tagSeat(sm, 4);
-    besta(g, -0.5, 5.15, IK.blackBrown);
-    c.tv = tv55(g, -0.5, 0.39, 5.12);
+    c.tv = yxstaby(g, M.black); c.leftName = 'schäslongen';
     plant(g, -1.45, 4.6, 0.6); plant(g, 1.38, 4.6, 0.7);
     deskTop(g, -1.6, -0.8, 5.8, 7.2, IK.oak, M.black, false);
     screens2(g, -1.12, 6.5); officeChair(g, -0.45, 6.5, -Math.PI / 2, IK.greyDark);
@@ -889,7 +919,7 @@
       'Mörka färger, hög lugg och sammetsgardiner. Kontoret står kvar till vänster och pysselbordet vid gaveln till höger om dörren. Ryggkuddarna är 86 cm höga och skymmer fönstrets nedersta 14 cm.';
     c.items = ['<b>FRIHETEN</b> hörnbäddsoffa med förvaring, Skiftebo mörkgrå – 230 × 151 cm, sitthöjd 44 cm, ryggkuddar 86 cm, bädd 140 × 204 cm',
       '<b>STRANDMON</b> fåtölj – har ni redan', '<b>AROMATISK</b> golvkudde', '<b>LISTERBY</b> soffbord, ekfaner – 140 × 60 × 37 cm',
-      '<b>BESTÅ</b> TV-bänk, svartbrun – 180 × 42 × 39 cm', '<b>MITTZON</b> skrivbord – 140 × 80 cm (eller ert nuvarande)',
+      '<b>YXSTABY</b> TV-stativ på hjul, svart – hylla 137 × 44 cm, höjd 113 cm, för TV upp till 55 tum, låsbara hjul', '<b>MITTZON</b> skrivbord – 140 × 80 cm (eller ert nuvarande)',
       '<b>LINNMON</b> bordsskiva 100 × 60 cm + <b>ADILS</b> ben – pysselbord', '<b>SKÅDIS</b> hålpanel 36 × 56 cm, <b>RÅSKOG</b> rullvagn, <b>FORSÅ</b> arbetslampa, <b>ODGER</b> stol',
       '<b>FLINTAN</b> kontorsstol', '<b>VINDUM</b> matta, hög lugg – 200 × 270 cm', '<b>SANELA</b> sammetsgardiner för förvaringen, <b>FEJKA</b> krukväxter'];
   })();
@@ -906,8 +936,7 @@
     people(c.normal, [[-0.66, 0.55, 0.46], [0, 0.55, 0.46], [0.66, 0.55, 0.46]], 0);
     var b = wingChair(g, 0.72, 3.32, 0); c.chairs = [b];
     people(b, [[0, -0.12, 0.46]], 3); tagSeat(b, 3);
-    lackTv(g, -0.55, 5.1, IK.white);
-    c.tv = tv55(g, -0.55, 0.36, 5.08);
+    c.tv = yxstaby(g, IK.white); c.leftName = 'golvkuddarna';
     plant(g, -1.45, 4.6, 0.6); plant(g, 1.4, 4.4, 0.7);
     deskTop(g, -1.45, -0.75, 5.9, 7.1, IK.white, IK.white, true);
     screens2(g, -1.1, 6.5); officeChair(g, -0.45, 6.5, -Math.PI / 2, IK.blue);
@@ -924,7 +953,7 @@
       'Kontoret får ett höj- och sänkbart TROTTEN, och pysselbordet är ett NORDEN klaffbord som står hopfällt längs högra sidan och fälls ut när ni pysslar (Pysselläge). Dagbäddens rygg är 83 cm och skymmer fönstrets nedersta 11 cm.';
     c.items = ['<b>HEMNES</b> dagbädd med 3 lådor, vit – ca 89 × 209 × 83 cm, två madrasser 80 × 200, blir dubbelsäng 160 × 200',
       '<b>STRANDMON</b> fåtölj – har ni redan', '<b>AROMATISK</b> golvkudde × 2', '<b>LACK</b> soffbord – 90 × 55 × 45 cm',
-      '<b>LACK</b> TV-bänk, vit – 160 × 35 × 36 cm', '<b>TROTTEN</b> skrivbord sitt/stå – 120 × 70 cm, höjd 72–122 cm',
+      '<b>YXSTABY</b> TV-stativ på hjul, vit – hylla 137 × 44 cm, höjd 113 cm, för TV upp till 55 tum, låsbara hjul', '<b>TROTTEN</b> skrivbord sitt/stå – 120 × 70 cm, höjd 72–122 cm',
       '<b>NORDEN</b> klaffbord – 26/89/152 × 80 cm, höjd 74 cm, + <b>ODGER</b> stol × 2', '<b>SKÅDIS</b> hålpanel 36 × 56 cm, <b>RÅSKOG</b> rullvagn, <b>FLINTAN</b> kontorsstol',
       '<b>LOHALS</b> matta, jute – 200 × 300 cm', '<b>HANNALENA</b> gardiner för förvaringen, <b>FEJKA</b> krukväxter'];
   })();
@@ -974,14 +1003,99 @@
     var c = KON[k];
     curtains.traverse(function (m) { if (m.isMesh) m.material = c.curtain; });
     document.getElementById('lCraft').hidden = !c.craftOpen;
-    scene.updateMatrixWorld(true);
-    c.aim = new THREE.Vector3().setFromMatrixPosition(screenOf(c).matrixWorld);
-    c.chairs.forEach(function (ch) { ch.rotation.y = Math.atan2(c.aim.x - ch.position.x, c.aim.z - ch.position.z); });
+    placeTv(c, c.tvp || loadTv(k)); syncTvUI();
     document.getElementById('desc').innerHTML = c.desc;
     document.getElementById('items').innerHTML = c.items.map(function (s) { return '<li>' + s + '</li>'; }).join('');
     applyModes();
     if (!fromHash) { try { location.hash = 'koncept-' + k.slice(1); } catch (e) {} }
   }
+  // --- TV-stativets placering: reglage, dra i 3D-vyn, takfallet sätter gränsen ---
+  var TVDEF = { k1: { x: -0.32, z: 5.1, r: 0, h: 1.0 }, k2: { x: -0.32, z: 5.12, r: 0, h: 1.0 }, k3: { x: -0.32, z: 5.08, r: 0, h: 1.0 } };
+  function copyP(p) { return { x: p.x, z: p.z, r: p.r, h: p.h }; }
+  function tvFits(p) {   // stativets ram (113 cm) och TV:ns övre hörn måste rymmas under takfallet och innanför knäväggarna
+    var cr = Math.cos(p.r), sr = Math.sin(p.r), ok = true;
+    function wx(lx, lz) { return p.x + lx * cr + lz * sr; }
+    function wz(lx, lz) { return p.z - lx * sr + lz * cr; }
+    [[-0.685, -0.22], [0.685, -0.22], [-0.685, 0.22], [0.685, 0.22]].forEach(function (a) {
+      var x = wx(a[0], a[1]), z = wz(a[0], a[1]);
+      if (Math.abs(x) > HI - 0.02 || z < 1.65 || z > L - 0.3 || H(x) < 1.14) ok = false;   // inte in i soffan eller gaveln
+    });
+    [-0.615, 0.615].forEach(function (lx) { if (H(wx(lx, -0.02)) < p.h + 0.365) ok = false; });
+    return ok;
+  }
+  function placeTv(c, p) {
+    c.tvp = copyP(p);
+    c.tv.position.set(p.x, 0, p.z); c.tv.rotation.y = p.r; c.tv.tvg.position.set(0, p.h, 0);
+    scene.updateMatrixWorld(true);
+    c.aim = new THREE.Vector3().setFromMatrixPosition(screenOf(c).matrixWorld);
+    c.chairs.forEach(function (ch) { ch.rotation.y = Math.atan2(c.aim.x - ch.position.x, c.aim.z - ch.position.z); });
+  }
+  function moveTv(c, want) {   // flytta så långt som möjligt mot önskat läge utan att något går in i takfallet
+    if (tvFits(want)) { placeTv(c, want); return; }
+    var from = c.tvp, best = null, lo = 0, hi = 1;
+    for (var i = 0; i < 16; i++) {
+      var m = (lo + hi) / 2, p = { x: from.x + (want.x - from.x) * m, z: from.z + (want.z - from.z) * m, r: from.r + (want.r - from.r) * m, h: from.h + (want.h - from.h) * m };
+      if (tvFits(p)) { best = p; lo = m; } else hi = m;
+    }
+    if (want.h !== from.h || want.r !== from.r) {   // ny höjd eller vridning: skjut stativet in mot mitten tills det ryms
+      for (var k = 1; k <= 60; k++) { var q = copyP(want); q.x = want.x * (1 - k / 60); if (tvFits(q)) { placeTv(c, q); return; } }
+    }
+    if (best) placeTv(c, best);
+  }
+  function tvText(c) {
+    var p = c.tvp, cm = Math.round(Math.abs(p.x) * 100), deg = Math.round(-p.r * 180 / Math.PI);
+    var side = cm === 0 ? 'mitt i rummet' : cm + ' cm från mitten mot ' + (p.x < 0 ? c.leftName : 'fåtöljen');
+    var rot = deg === 0 ? 'rakt mot fönstret' : 'vriden ' + Math.abs(deg) + '° mot ' + (deg > 0 ? 'fåtöljen' : c.leftName);
+    return '<b>YXSTABY:</b> ' + side + ' · ' + p.z.toFixed(2).replace('.', ',') + ' m från fönstret · ' + rot + ' · TV:ns mitt ' + Math.round(p.h * 100) +
+      ' cm över golvet. Dra stativet i 3D-vyn (enklast i planvyn) eller använd reglagen; takfallet sätter gränsen.';
+  }
+  function syncTvUI() {
+    var c = KON[cur], p = c.tvp;
+    document.getElementById('tvX').value = p.x; document.getElementById('tvZ').value = p.z;
+    document.getElementById('tvR').value = Math.round(-p.r * 180 / Math.PI); document.getElementById('tvH').value = Math.round(p.h * 100);
+    document.getElementById('tvval').innerHTML = tvText(c);
+  }
+  function saveTv() { try { localStorage.setItem('vind-ikea-tv-' + cur, JSON.stringify(KON[cur].tvp)); } catch (e) {} }
+  function loadTv(k) {
+    try { var p = JSON.parse(localStorage.getItem('vind-ikea-tv-' + k) || 'null'); if (p && isFinite(p.x) && isFinite(p.z) && isFinite(p.r) && isFinite(p.h) && tvFits(p)) return p; } catch (e) {}
+    return copyP(TVDEF[k]);
+  }
+  var sightT = 0;
+  function sightSoon() { if (sightT) return; sightT = setTimeout(function () { sightT = 0; if (!document.getElementById('tBed').checked) sight(); }, 150); }
+  [['tvX', 'x', 1], ['tvZ', 'z', 1], ['tvR', 'r', -Math.PI / 180], ['tvH', 'h', 0.01]].forEach(function (a) {
+    var el = document.getElementById(a[0]);
+    el.addEventListener('input', function () { var c = KON[cur], p = copyP(c.tvp); p[a[1]] = parseFloat(el.value) * a[2]; moveTv(c, p); syncTvUI(); sightSoon(); });
+    el.addEventListener('change', function () { syncTvUI(); saveTv(); if (!document.getElementById('tBed').checked) sight(); });
+  });
+  document.getElementById('tvReset').addEventListener('click', function () {
+    var c = KON[cur]; placeTv(c, copyP(TVDEF[cur])); try { localStorage.removeItem('vind-ikea-tv-' + cur); } catch (e) {}
+    syncTvUI(); if (!document.getElementById('tBed').checked) sight();
+  });
+  // dra stativet med mus eller finger
+  var pick = new THREE.Raycaster(), drag = null, ndc = new THREE.Vector2(), dragPlane = new THREE.Plane(), hitP = new THREE.Vector3();
+  function pointerRay(e) {
+    var rc = canvas.getBoundingClientRect();
+    ndc.set(((e.clientX - rc.left) / rc.width) * 2 - 1, -((e.clientY - rc.top) / rc.height) * 2 + 1); pick.setFromCamera(ndc, camera);
+  }
+  function overTv(e) { var c = KON[cur]; if (!c || !lounge.visible) return null; pointerRay(e); var h = pick.intersectObject(c.tv, true); return h.length ? h[0] : null; }
+  function tvDragStart(e) {
+    if (e.button === 2 || e.shiftKey) return false;
+    var h = overTv(e); if (!h) return false;
+    var c = KON[cur]; dragPlane.set(new THREE.Vector3(0, 1, 0), -h.point.y);
+    drag = { id: e.pointerId, dx: c.tvp.x - h.point.x, dz: c.tvp.z - h.point.z }; anim = null;
+    canvas.style.cursor = 'grabbing'; return true;
+  }
+  function tvDragMove(e) {
+    if (!drag || e.pointerId !== drag.id) return false;
+    pointerRay(e);
+    if (pick.ray.intersectPlane(dragPlane, hitP)) { var c = KON[cur], p = copyP(c.tvp); p.x = hitP.x + drag.dx; p.z = hitP.z + drag.dz; moveTv(c, p); syncTvUI(); sightSoon(); }
+    return true;
+  }
+  function tvDragEnd(e) {
+    if (!drag || e.pointerId !== drag.id) return false;
+    drag = null; canvas.style.cursor = ''; syncTvUI(); saveTv(); if (!document.getElementById('tBed').checked) sight(); return true;
+  }
+  function tvHover(e) { if (e.pointerType === 'mouse') canvas.style.cursor = overTv(e) ? 'grab' : ''; }
   function konFromHash() { var m = /^#koncept-([123])$/.exec(location.hash || ''); return m ? 'k' + m[1] : null; }
   document.getElementById('props').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) setKon(b.dataset.prop); });
   window.addEventListener('hashchange', function () { var k = konFromHash(); if (k) setKon(k, true); });
@@ -993,6 +1107,8 @@
   });
   setKon(konFromHash() || 'k1', true);
   window.__KON = KON; window.__setKon = setKon; window.__sight = sight;
+  window.__project = function (x, y, z) { var v = new THREE.Vector3(x, y, z).project(camera), r = canvas.getBoundingClientRect(); return [r.left + (v.x + 1) / 2 * r.width, r.top + (1 - v.y) / 2 * r.height]; };
+  window.__tv = function (q) { var c = KON[cur], p = copyP(c.tvp); for (var k in q) p[k] = q[k]; moveTv(c, p); syncTvUI(); sight(); return copyP(c.tvp); };
 
   // ---------- Måttsättning ----------
   var css = getComputedStyle(document.documentElement);
@@ -1076,11 +1192,13 @@
   canvas.addEventListener('contextmenu', function (e) { e.preventDefault(); });
   canvas.addEventListener('pointerdown', function (e) {
     canvas.setPointerCapture(e.pointerId);
+    if (tvDragStart(e)) return;
     ptrs[e.pointerId] = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey };
     lastPinch = 0; lastMid = null; anim = null;
   });
   canvas.addEventListener('pointermove', function (e) {
-    var p = ptrs[e.pointerId]; if (!p) return;
+    if (tvDragMove(e)) return;
+    var p = ptrs[e.pointerId]; if (!p) { tvHover(e); return; }
     var dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
     var ids = Object.keys(ptrs);
     if (ids.length === 1) {
@@ -1094,7 +1212,7 @@
     }
     clearPressed(); applyCam();
   });
-  function up(e) { delete ptrs[e.pointerId]; lastPinch = 0; lastMid = null; }
+  function up(e) { if (tvDragEnd(e)) return; delete ptrs[e.pointerId]; lastPinch = 0; lastMid = null; }
   canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
   canvas.addEventListener('wheel', function (e) {
     e.preventDefault(); anim = null; sph.r *= Math.exp(e.deltaY * 0.0012); clearPressed(); applyCam();
